@@ -1,0 +1,53 @@
+﻿Keluhan,Masuk ke kolom penyakit,Catatan,Kode ICD-10,Nama ICD-10,Jenis (Menular/Tidak Menular)
+ambeien,Hemoroid (Ambeien),,K64.9,"Hemoroid, tidak spesifik",Tidak Menular
+Nyeri ulu hati,Gastritis (Radang Selaput Lambung),,K29.7,"Gastritis, tidak spesifik",Tidak Menular
+batuk,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+batuk pilek,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+demam,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+diare,DIARE/KONSTIPASI,,A09,"Diare dan gastroenteritis, diduga infeksi",Menular
+gatal kemerahan,DERMATITIS,,L30.9,"Dermatitis, tidak spesifik",Tidak Menular
+gatal bernanah,DERMATITIS,,L30.9,"Dermatitis, tidak spesifik",Tidak Menular
+infeksi tangan,,Sengaja dikosongkan (tidak dihitung),L08.9,"Infeksi lokal kulit, tidak spesifik",
+keseleo,Trauma (Cidera),,T14.9,"Cedera, tidak spesifik",Tidak Menular
+lemas,Malaise,Sengaja dikosongkan (tidak dihitung),R53,Malaise dan kelelahan,Tidak Menular
+Riwayat kencing manis,DIABETES,Sengaja dikosongkan (tidak dihitung),E11.9,Diabetes melitus tipe 2 tanpa komplikasi,Tidak Menular
+maag,Gastritis (Radang Selaput Lambung),,K29.7,"Gastritis, tidak spesifik",Tidak Menular
+demam,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+mual,Gastritis (Radang Selaput Lambung),,K29.7,"Gastritis, tidak spesifik",Tidak Menular
+nyeri badan,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+nyeri ulu hati,Gastritis (Radang Selaput Lambung),,K29.7,"Gastritis, tidak spesifik",Tidak Menular
+pegal,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+pegal - pegal,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+pegal pegal,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+pilek,FLU,,J11.1,Influenza dengan manifestasi pernapasan lain,Menular
+pusing,Vertigo Perifer,,H81.3,Vertigo perifer lainnya,Tidak Menular
+sakit dada,Gastritis (Radang Selaput Lambung),Sengaja dikosongkan (tidak dihitung),R07.4,"Nyeri dada, tidak spesifik",Tidak Menular
+sakit gigi,KARIES GIGI,,K02.9,"Karies gigi, tidak spesifik",Tidak Menular
+sakit kepala,Cefalgia (Nyeri Kepala),,R51,Sakit kepala,Tidak Menular
+sakit perut,Dispepsia (Syndrom Gangguan Pencernaan),,K30,Dispepsia,Tidak Menular
+sakit telinga ,"Otitis (Eksterna, Media Akut, Media Supuratifa Kronis)",,H66.9,"Otitis media, tidak spesifik",Tidak Menular
+sakit tenggorokan,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+sariawan,SARIAWAN,,K12.0,Stomatitis aftosa rekuren,Tidak Menular
+FLU,FLU,,J11.1,Influenza dengan manifestasi pernapasan lain,Menular
+mual - mual,Gastritis (Radang Selaput Lambung),,K29.7,"Gastritis, tidak spesifik",Tidak Menular
+Gatal malam hari,SCABIES,,B86,Skabies,Menular
+Benjolan bisul,BISUL,,L02.9,"Abses kutaneus, furunkel, karbunkel, tidak spesifik",Menular
+meriang,ISPA,,J06.9,"Infeksi saluran napas atas akut, tidak spesifik",Menular
+"Mencret, Sakit perut",DIARE/KONSTIPASI,,A09,"Diare dan gastroenteritis, diduga infeksi",Menular
+sakit pinggang,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+riwayat hipertensi,Hipertensi,,I10,Hipertensi esensial (primer),Tidak Menular
+Bintik-bintik kemerahan,SCABIES,,B86,Skabies,Menular
+sempoyongan,VERTIGO,,R42,Pusing dan rasa melayang,Tidak Menular
+Kunang-kunang,VERTIGO,,R42,Pusing dan rasa melayang,Tidak Menular
+Benjolan dikelopak mata,Hordeolum (Bintitan),,H00.0,Hordeolum dan abses kelopak mata lainnya,Tidak Menular
+Mata kemerahan,Iritasi Mata,,H10.9,"Konjungtivitis, tidak spesifik",Tidak Menular
+Sesak napas,ASMA,,J45.9,"Asma, tidak spesifik",Tidak Menular
+"Badan panas, sakit perut",DEMAM TIFOID,,A01.0,Demam tifoid,Menular
+Nyeri saat kencing,ISK,,N39.0,"Infeksi saluran kemih, lokasi tidak spesifik",Tidak Menular
+luka robek,Trauma (Cidera),,T14.9,"Cedera, tidak spesifik",Tidak Menular
+nyeri leher bagian belakang,Miopati/ Myalgia (Gangguan Otot),,M79.1,Mialgia,Tidak Menular
+Nyeri telinga,"Otitis (Eksterna, Media Akut, Media Supuratifa Kronis)",,H66.9,"Otitis media, tidak spesifik",Tidak Menular
+Luka lecet,Vulnus Laseratum,,T14.1,"Luka terbuka, regio tubuh tidak spesifik",Tidak Menular
+bengkak dikaki,oedema kaki,,R60.0,Edema lokal,Tidak Menular
+"Gusi bengkak, sakit gigi",Gingivitis,,K05.1,Gingivitis kronis,Tidak Menular
+Gatal,SCABIES,,B86,Skabies,Menular

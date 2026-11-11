@@ -1,0 +1,6 @@
+{
+  "name": "Klinik Pratama Lapas Kelas IIB Dompu",
+  "description": "Sistem Informasi Rekam Medis, Kunjungan Harian, Rekapitulasi Penyakit dan Pemantauan Faskes BPJS Warga Binaan Lapas Kelas IIB Dompu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
