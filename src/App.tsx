@@ -3,20 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar, { TabKey } from './components/Sidebar';
-import DailyInput from './components/DailyInput';
-import WbpDirectory from './components/WbpDirectory';
-import MonthlyRecap from './components/MonthlyRecap';
-import BpjsDashboard from './components/BpjsDashboard';
-import Dashboard from './components/Dashboard';
-import SettingsModal from './components/SettingsModal';
-import MedicalRecordModal from './components/MedicalRecordModal';
 import LoginView from './components/LoginView';
 import { getCurrentSession, logoutSession } from './lib/auth';
 import { store } from './lib/storage';
 import { WbpItem } from './types';
+
+// Keep infrequently used, data-heavy screens out of the initial bundle.
+const DailyInput = lazy(() => import('./components/DailyInput'));
+const WbpDirectory = lazy(() => import('./components/WbpDirectory'));
+const MonthlyRecap = lazy(() => import('./components/MonthlyRecap'));
+const BpjsDashboard = lazy(() => import('./components/BpjsDashboard'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const MedicalRecordModal = lazy(() => import('./components/MedicalRecordModal'));
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -28,10 +30,8 @@ export default function App() {
     return localStorage.getItem('klinik_dompu_theme') === 'dark';
   });
 
-  // Global Medical Record modal
   const [selectedPatientForRecord, setSelectedPatientForRecord] = useState<WbpItem | null>(null);
 
-  // Quick counts for sidebar badges
   const [counts, setCounts] = useState({
     todayVisits: 0,
     totalWbp: 0,
@@ -44,37 +44,22 @@ export default function App() {
     const visits = store.getCalculatedKunjungan(false);
     const wbps = store.getWbpList();
 
-    const todayCount = visits.filter((k) => k.tanggal === todayStr).length;
-    const pendingBpjs = wbps.filter((w) => w.batch_bpjs === 'Belum masuk batch').length;
-    const flaggedSidb = wbps.filter((w) => w.perlu_dicek).length;
-
     setCounts({
-      todayVisits: todayCount,
+      todayVisits: visits.filter((k) => k.tanggal === todayStr).length,
       totalWbp: wbps.length,
-      pendingBpjs,
-      flaggedSidb,
+      pendingBpjs: wbps.filter((w) => w.batch_bpjs === 'Belum masuk batch').length,
+      flaggedSidb: wbps.filter((w) => w.perlu_dicek).length,
     });
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      updateCounts();
-    }
+    if (isAuthenticated) updateCounts();
   }, [isAuthenticated, activeTab]);
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('klinik_dompu_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('klinik_dompu_theme', 'light');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('klinik_dompu_theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
-
-  const handleToggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
 
   const handleLogout = () => {
     logoutSession();
@@ -86,7 +71,7 @@ export default function App() {
       <LoginView
         onLoginSuccess={() => {
           setIsAuthenticated(true);
-          setActiveTab('input'); // "Layar Input Harian adalah layar utama setelah login."
+          setActiveTab('input');
         }}
       />
     );
@@ -103,10 +88,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">
-      {/* Top Bar with Brand, Global Search, and Actions */}
       <Header
         darkMode={darkMode}
-        onToggleDarkMode={handleToggleDarkMode}
+        onToggleDarkMode={() => setDarkMode((current) => !current)}
         onOpenSettings={() => setActiveTab('pengaturan')}
         onLogout={handleLogout}
         onSelectPatient={(wbp) => setSelectedPatientForRecord(wbp)}
@@ -114,52 +98,31 @@ export default function App() {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar & Mobile Bottom Navigation */}
-        <Sidebar
-          activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab)}
-          counts={counts}
-        />
-
-        {/* Main Content Area */}
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} counts={counts} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 lg:pb-8">
           <div className="max-w-7xl mx-auto">
-            {activeTab === 'input' && (
-              <DailyInput
-                onOpenMedicalRecord={(wbp) => setSelectedPatientForRecord(wbp)}
-                onRefreshData={updateCounts}
-              />
-            )}
-
-            {activeTab === 'pasien' && (
-              <WbpDirectory
-                onSelectWbp={(wbp) => setSelectedPatientForRecord(wbp)}
-              />
-            )}
-
-            {activeTab === 'rekap' && <MonthlyRecap />}
-
-            {activeTab === 'bpjs' && <BpjsDashboard />}
-
-            {activeTab === 'dashboard' && (
-              <Dashboard
-                onNavigateToTab={(tab) => setActiveTab(tab)}
-                onSelectWbp={(wbp) => setSelectedPatientForRecord(wbp)}
-              />
-            )}
-
-            {activeTab === 'pengaturan' && <SettingsModal />}
+            <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">Memuat halaman…</div>}>
+              {activeTab === 'input' && (
+                <DailyInput onOpenMedicalRecord={setSelectedPatientForRecord} onRefreshData={updateCounts} />
+              )}
+              {activeTab === 'pasien' && <WbpDirectory onSelectWbp={setSelectedPatientForRecord} />}
+              {activeTab === 'rekap' && <MonthlyRecap />}
+              {activeTab === 'bpjs' && <BpjsDashboard />}
+              {activeTab === 'dashboard' && (
+                <Dashboard onNavigateToTab={setActiveTab} onSelectWbp={setSelectedPatientForRecord} />
+              )}
+              {activeTab === 'pengaturan' && <SettingsModal />}
+              {selectedPatientForRecord && (
+                <MedicalRecordModal wbp={selectedPatientForRecord} onClose={() => setSelectedPatientForRecord(null)} />
+              )}
+            </Suspense>
           </div>
         </main>
       </div>
 
-      {/* Global Medical Record Modal */}
-      {selectedPatientForRecord && (
-        <MedicalRecordModal
-          wbp={selectedPatientForRecord}
-          onClose={() => setSelectedPatientForRecord(null)}
-        />
-      )}
+      <footer className="border-t border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 px-4 py-3 text-center text-xs text-slate-500 dark:text-slate-400">
+        Made with <span aria-label="love">❤️</span> by Joshua | © 2026
+      </footer>
     </div>
   );
 }
