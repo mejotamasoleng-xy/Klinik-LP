@@ -135,6 +135,25 @@ export const sidbHistory = pgTable('sidb_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const clinicAuth = pgTable('clinic_auth', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  mustChangePassword: boolean('must_change_password').notNull().default(true),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const authSessions = pgTable('auth_sessions', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const appMigrations = pgTable('app_migrations', {
+  key: text('key').primaryKey(),
+  appliedAt: timestamp('applied_at').defaultNow(),
+});
+
 // Drizzle relations
 export const wbpRelations = relations(wbp, ({ many }) => ({
   kunjungan: many(kunjungan),

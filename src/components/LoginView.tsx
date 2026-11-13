@@ -8,7 +8,7 @@ import { Eye, EyeOff, Lock, User, ShieldCheck, AlertCircle } from 'lucide-react'
 import { getLockoutState, loginWithCredentials } from '../lib/auth';
 
 interface LoginViewProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (mustChangePassword: boolean) => void;
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
@@ -49,7 +49,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     try {
       const res = await loginWithCredentials(username, password, rememberMe);
       if (res.success) {
-        onLoginSuccess();
+        onLoginSuccess(Boolean(res.mustChangePassword));
       } else {
         setErrorMsg(res.message || 'Gagal masuk. Periksa kembali username dan password.');
       }
@@ -137,9 +137,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               />
               <button
                 type="button"
+                aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                aria-pressed={showPassword}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

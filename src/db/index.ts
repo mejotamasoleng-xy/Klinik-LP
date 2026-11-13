@@ -4,56 +4,47 @@
  */
 
 import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.ts';
+
+loadEnv({ path: '.env.development.local' });
 
 declare global {
   var _postgresPool: Pool | undefined;
 }
 
-export const hasSqlConfig = Boolean(
-  process.env.SQL_HOST &&
-    process.env.SQL_DB_NAME &&
-    process.env.SQL_USER &&
-    process.env.SQL_PASSWORD
-);
+const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+export const hasSqlConfig = Boolean(connectionString);
 
 export const createPool = () => {
-  if (!hasSqlConfig) {
-    return null;
-  }
+  if (!connectionString) return null;
+
   if (!global._postgresPool) {
     global._postgresPool = new Pool({
-      host: process.env.SQL_HOST,
-      user: process.env.SQL_USER,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DB_NAME,
+      connectionString,
       max: 10,
       connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000,
     });
 
     global._postgresPool.on('error', (err) => {
-      console.error('Unexpected error on idle SQL pool client:', err);
+      console.error('Unexpected error on idle PostgreSQL pool client:', err);
     });
   }
+
   return global._postgresPool;
 };
 
 let dbInstance: NodePgDatabase<typeof schema> | null = null;
 
 if (hasSqlConfig) {
-  try {
-    const pool = createPool();
-    if (pool) {
-      dbInstance = drizzle(pool, { schema });
-    }
-  } catch (err) {
-    console.warn('[AI Studio] Database initialization failed — using in-memory mock:', err);
-    dbInstance = null;
-  }
-} else {
-  console.warn('[AI Studio] SQL environment variables not configured — using in-memory database mock');
+  const pool = createPool();
+  if (pool) dbInstance = drizzle(pool, { schema });
+} else if (process.env.NODE_ENV === 'production') {
+  throw new Error('DATABASE_URL is required for production data access.');
 }
 
 export const db = dbInstance;

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { createHash } from 'node:crypto';
 import { eq, desc, sql } from 'drizzle-orm';
 import { db } from './index.ts';
 import {
@@ -13,6 +14,7 @@ import {
   pengaturanApp,
   auditLogs,
   sidbHistory,
+  appMigrations,
 } from './schema.ts';
 
 type WbpRow = typeof wbp.$inferSelect;
@@ -175,7 +177,7 @@ export async function getAllWbp() {
     return await db.select().from(wbp);
   } catch (error) {
     console.error('Failed to fetch WBP:', error);
-    return memoryStore.wbp;
+    throw new Error('Failed to fetch WBP records.', { cause: error });
   }
 }
 
@@ -280,7 +282,7 @@ export async function getAllKunjungan() {
     return await db.select().from(kunjungan).orderBy(desc(kunjungan.createdAt));
   } catch (error) {
     console.error('Failed to fetch Kunjungan:', error);
-    return memoryStore.kunjungan;
+    throw new Error('Failed to fetch visit records.', { cause: error });
   }
 }
 
@@ -474,7 +476,7 @@ export async function getAllPenyakit() {
     return await db.select().from(daftarPenyakit).orderBy(daftarPenyakit.urutan);
   } catch (error) {
     console.error('Failed to fetch Penyakit:', error);
-    return memoryStore.penyakit;
+    throw new Error('Failed to fetch disease references.', { cause: error });
   }
 }
 
@@ -517,7 +519,7 @@ export async function getAllReferensi() {
     return await db.select().from(referensiIcd10);
   } catch (error) {
     console.error('Failed to fetch Referensi:', error);
-    return memoryStore.referensi;
+    throw new Error('Failed to fetch ICD-10 references.', { cause: error });
   }
 }
 
@@ -594,6 +596,7 @@ export async function updateReferensiJenisByPenyakit(penyakitName: string, jenis
       .where(sql`LOWER(TRIM(${referensiIcd10.masukPenyakit})) = ${lower}`);
   } catch (error) {
     console.error('Failed to cascade disease jenis to referensi:', error);
+    throw new Error('Failed to update disease types.', { cause: error });
   }
 }
 
@@ -610,7 +613,7 @@ export async function getSetting(key: string) {
     return result[0]?.value ?? null;
   } catch (error) {
     console.error(`Failed to get setting ${key}:`, error);
-    return memoryStore.pengaturan.get(key) ?? null;
+    throw new Error('Failed to read settings.', { cause: error });
   }
 }
 
@@ -655,7 +658,7 @@ export async function addAuditLog(entry: AuditLogInsert) {
     return await db.insert(auditLogs).values(entry).onConflictDoNothing().returning();
   } catch (error) {
     console.error('Failed to add audit log:', error);
-    return [];
+    throw new Error('Failed to add audit log.', { cause: error });
   }
 }
 
@@ -667,7 +670,7 @@ export async function getAuditLogs(limitCount = 500) {
     return await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limitCount);
   } catch (error) {
     console.error('Failed to get audit logs:', error);
-    return memoryStore.auditLogs;
+    throw new Error('Failed to fetch audit logs.', { cause: error });
   }
 }
 
@@ -680,7 +683,7 @@ export async function getSidbHistoryList() {
     return await db.select().from(sidbHistory).orderBy(desc(sidbHistory.createdAt));
   } catch (error) {
     console.error('Failed to get SIDB history:', error);
-    return memoryStore.sidbHistory;
+    throw new Error('Failed to fetch SIDB history.', { cause: error });
   }
 }
 
@@ -803,5 +806,74 @@ export async function restoreAllTables(payload: {
   } catch (error) {
     console.error('Failed to restore full backup to DB:', error);
     throw new Error('Failed to restore full backup.', { cause: error });
+  }
+}
+
+export async function importLegacySnapshotOnce(
+  deviceId: string,
+  payload: {
+    wbp: WbpInsert[];
+    kunjungan: KunjunganInsert[];
+    referensi: ReferensiInsert[];
+    penyakit: PenyakitInsert[];
+    pengaturan?: any;
+    sidbHistory: SidbHistoryInsert[];
+    auditLogs: AuditLogInsert[];
+  }
+) {
+  if (!db) throw new Error('Neon database is required to import local records.');
+
+  const deviceKey = createHash('sha256').update(deviceId).digest('hex');
+  try {
+    return await db.transaction(async (tx) => {
+      const deviceClaim = await tx
+        .insert(appMigrations)
+        .values({ key: `legacy-device-${deviceKey}` })
+        .onConflictDoNothing()
+        .returning({ key: appMigrations.key });
+
+      if (!deviceClaim.length) return { imported: false, initialImport: false };
+
+      const initialClaim = await tx
+        .insert(appMigrations)
+        .values({ key: 'legacy-local-storage-bootstrap-v1' })
+        .onConflictDoNothing()
+        .returning({ key: appMigrations.key });
+      const initialImport = initialClaim.length > 0;
+
+      if (initialImport) {
+        await tx.delete(kunjungan);
+        await tx.delete(wbp);
+        await tx.delete(referensiIcd10);
+        await tx.delete(daftarPenyakit);
+        await tx.delete(sidbHistory);
+        await tx.delete(auditLogs);
+      }
+
+      const insertInChunks = async (table: any, rows: any[]) => {
+        for (let index = 0; index < rows.length; index += 100) {
+          await tx.insert(table).values(rows.slice(index, index + 100)).onConflictDoNothing();
+        }
+      };
+
+      await insertInChunks(wbp, payload.wbp);
+      await insertInChunks(kunjungan, payload.kunjungan);
+      await insertInChunks(referensiIcd10, payload.referensi);
+      await insertInChunks(daftarPenyakit, payload.penyakit);
+      await insertInChunks(sidbHistory, payload.sidbHistory);
+      await insertInChunks(auditLogs, payload.auditLogs);
+
+      if (initialImport && payload.pengaturan) {
+        await tx
+          .insert(pengaturanApp)
+          .values({ key: 'app_settings', value: payload.pengaturan })
+          .onConflictDoUpdate({ target: pengaturanApp.key, set: { value: payload.pengaturan } });
+      }
+
+      return { imported: true, initialImport };
+    });
+  } catch (error) {
+    console.error('Failed to import local browser data:', error);
+    throw new Error('Failed to import local browser data.', { cause: error });
   }
 }

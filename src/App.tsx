@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { lazy, Suspense, useState, useEffect } from 'react';
+import React, { lazy, Suspense, useCallback, useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar, { TabKey } from './components/Sidebar';
 import LoginView from './components/LoginView';
+import ChangePasswordView from './components/ChangePasswordView';
 import { getCurrentSession, logoutSession } from './lib/auth';
 import { store, useStoreSync } from './lib/storage';
 import { WbpItem } from './types';
@@ -22,9 +23,8 @@ const MedicalRecordModal = lazy(() => import('./components/MedicalRecordModal'))
 
 export default function App() {
   const storeVersion = useStoreSync();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return getCurrentSession() !== null;
-  });
+  const [authStatus, setAuthStatus] = useState<'checking' | 'signed-out' | 'syncing' | 'authenticated' | 'change-password' | 'error'>('checking');
+  const [startupError, setStartupError] = useState('');
 
   const [activeTab, setActiveTab] = useState<TabKey>('input');
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -53,9 +53,64 @@ export default function App() {
     });
   };
 
+  const prepareAuthenticatedApp = useCallback(async () => {
+    setAuthStatus('syncing');
+    setStartupError('');
+    try {
+      await store.importLocalDataToDatabase();
+      await store.syncFromDatabase();
+      store.startRealtimeSync();
+      setActiveTab('input');
+      setAuthStatus('authenticated');
+    } catch {
+      store.stopRealtimeSync();
+      setStartupError('Tidak dapat memuat data dari database klinik. Periksa koneksi lalu coba lagi.');
+      setAuthStatus('error');
+    }
+  }, []);
+
   useEffect(() => {
-    if (isAuthenticated) updateCounts();
-  }, [isAuthenticated, activeTab, storeVersion]);
+    let active = true;
+    const restoreSession = async () => {
+      try {
+        const session = await getCurrentSession();
+        if (!active) return;
+        if (!session) {
+          setAuthStatus('signed-out');
+          return;
+        }
+        if (session.mustChangePassword) {
+          setAuthStatus('change-password');
+          return;
+        }
+        await prepareAuthenticatedApp();
+      } catch {
+        if (active) {
+          setStartupError('Sesi atau database klinik tidak dapat diperiksa. Coba muat ulang halaman.');
+          setAuthStatus('error');
+        }
+      }
+    };
+
+    const handleSessionExpired = () => {
+      store.clearSensitiveData();
+      setAuthStatus('signed-out');
+    };
+    const handlePasswordChangeRequired = () => setAuthStatus('change-password');
+
+    void restoreSession();
+    window.addEventListener('clinic:session-expired', handleSessionExpired);
+    window.addEventListener('clinic:password-change-required', handlePasswordChangeRequired);
+    return () => {
+      active = false;
+      window.removeEventListener('clinic:session-expired', handleSessionExpired);
+      window.removeEventListener('clinic:password-change-required', handlePasswordChangeRequired);
+    };
+  }, [prepareAuthenticatedApp]);
+
+  useEffect(() => {
+    if (authStatus === 'authenticated') updateCounts();
+  }, [authStatus, activeTab, storeVersion]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('klinik_dompu_theme');
@@ -69,17 +124,45 @@ export default function App() {
     localStorage.setItem('klinik_dompu_theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
-  const handleLogout = () => {
-    logoutSession();
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await logoutSession();
+    store.clearSensitiveData();
+    setAuthStatus('signed-out');
   };
 
-  if (!isAuthenticated) {
+  if (authStatus === 'checking' || authStatus === 'syncing') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
+        <p role="status" className="text-sm text-slate-600 dark:text-slate-300">Menghubungkan ke data klinik…</p>
+      </main>
+    );
+  }
+
+  if (authStatus === 'error') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-8">
+        <section className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 shadow-sm">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-white">Koneksi data belum tersedia</h1>
+          <p role="alert" className="mt-2 text-sm text-slate-600 dark:text-slate-300">{startupError}</p>
+          <div className="mt-5 flex gap-3">
+            <button type="button" onClick={() => void prepareAuthenticatedApp()} className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Coba lagi</button>
+            <button type="button" onClick={handleLogout} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">Keluar</button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (authStatus === 'change-password') {
+    return <ChangePasswordView onPasswordChanged={prepareAuthenticatedApp} />;
+  }
+
+  if (authStatus === 'signed-out') {
     return (
       <LoginView
-        onLoginSuccess={() => {
-          setIsAuthenticated(true);
-          setActiveTab('input');
+        onLoginSuccess={(mustChangePassword) => {
+          if (mustChangePassword) setAuthStatus('change-password');
+          else void prepareAuthenticatedApp();
         }}
       />
     );

@@ -19,8 +19,6 @@ export const INITIAL_PENGATURAN: PengaturanApp = {
   batas_sering_berobat_kali: 7,
   periode_sering_hari: 7,
   batches: INITIAL_BATCHES,
-  // SHA-256 for default password "admin"
-  password_hash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
   nama_klinik: 'Klinik Pratama Lapas Kelas IIB Dompu',
   dokter_penanggung_jawab: 'dr. Penanggung Jawab Klinik',
   perawat_pemeriksa: 'Petugas Perawatan Lapas Dompu',
