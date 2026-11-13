@@ -135,6 +135,20 @@ export const sidbHistory = pgTable('sidb_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const katalogObat = pgTable('katalog_obat', {
+  id: text('id').primaryKey(),
+  no: integer('no').notNull().unique(),
+  namaTampilanObat: text('nama_tampilan_obat').notNull(),
+  namaDasar: text('nama_dasar').notNull(),
+  kekuatanSediaan: text('kekuatan_sediaan').notNull(),
+  satuanTerkecil: text('satuan_terkecil').notNull(),
+  isiPerKotak: integer('isi_per_kotak').notNull(),
+  satuanIsi: text('satuan_isi').notNull(),
+  status: text('status').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const clinicAuth = pgTable('clinic_auth', {
   id: text('id').primaryKey(),
   username: text('username').notNull(),
