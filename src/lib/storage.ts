@@ -36,14 +36,6 @@ const STORAGE_KEYS = {
   THEME: 'klinik_dompu_theme',
 };
 
-// SHA-256 helper
-export async function hashPassword(password: string): Promise<string> {
-  const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 // Date helpers for dd/mm/yyyy
 export function parseDate(str: string): Date | null {
   if (!str) return null;
@@ -242,6 +234,11 @@ class DataStore {
   private lastKnownServerVersion = 0;
   private eventSource: EventSource | null = null;
   private clientId: string;
+  private realtimeSyncStarted = false;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private focusHandler: (() => void) | null = null;
+  private visibilityHandler: (() => void) | null = null;
 
   constructor() {
     this.clientId =
@@ -249,9 +246,6 @@ class DataStore {
         ? 'client-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
         : 'ssr';
     this.loadFromLocalStorage();
-    if (typeof window !== 'undefined') {
-      this.initRealtimeSync();
-    }
   }
 
   public subscribe(listener: () => void): () => void {
@@ -284,65 +278,74 @@ class DataStore {
     if (options.body && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
-    return fetch(url, { ...options, headers });
+    return fetch(url, { ...options, credentials: 'same-origin', headers });
+  }
+
+  public startRealtimeSync() {
+    if (typeof window === 'undefined' || this.realtimeSyncStarted) return;
+    this.realtimeSyncStarted = true;
+    this.initRealtimeSync();
+  }
+
+  public stopRealtimeSync() {
+    this.realtimeSyncStarted = false;
+    this.eventSource?.close();
+    this.eventSource = null;
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.focusHandler) window.removeEventListener('focus', this.focusHandler);
+    if (this.visibilityHandler) document.removeEventListener('visibilitychange', this.visibilityHandler);
+    this.pollTimer = null;
+    this.reconnectTimer = null;
+    this.focusHandler = null;
+    this.visibilityHandler = null;
   }
 
   private initRealtimeSync() {
-    // Initial pull from Cloud SQL
-    this.syncFromDatabase();
+    void this.syncFromDatabase().catch(() => undefined);
 
-    // Real-time Server-Sent Events subscription
     const connectSse = () => {
-      if (this.eventSource) {
-        this.eventSource.close();
-      }
+      if (!this.realtimeSyncStarted) return;
+      this.eventSource?.close();
       try {
-        const es = new EventSource('/api/events');
-        this.eventSource = es;
-
-        es.onmessage = (event) => {
+        const source = new EventSource('/api/events');
+        this.eventSource = source;
+        source.onmessage = (event) => {
           try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'connected') {
-              if (msg.version && msg.version > this.lastKnownServerVersion) {
-                this.syncFromDatabase();
-              }
-            } else if (msg.type === 'sync') {
-              if (msg.sourceClientId !== this.clientId) {
-                this.syncFromDatabase();
-              }
+            const message = JSON.parse(event.data);
+            if (message.type === 'connected' && message.version > this.lastKnownServerVersion) {
+              void this.syncFromDatabase().catch(() => undefined);
+            } else if (message.type === 'sync' && message.sourceClientId !== this.clientId) {
+              void this.syncFromDatabase().catch(() => undefined);
             }
           } catch {
-            // ignore malformed heartbeat
+            // Ignore malformed heartbeats from the event stream.
           }
         };
-
-        es.onerror = () => {
-          es.close();
-          this.eventSource = null;
-          setTimeout(connectSse, 5000);
+        source.onerror = () => {
+          source.close();
+          if (this.eventSource === source) this.eventSource = null;
+          if (this.realtimeSyncStarted) {
+            this.reconnectTimer = setTimeout(connectSse, 5000);
+          }
         };
       } catch {
-        // ignore if EventSource unavailable
+        // EventSource is optional; the periodic poll remains available.
       }
     };
 
     connectSse();
-
-    // Refresh when tab/window regains focus or visibility
-    window.addEventListener('focus', () => {
-      this.syncFromDatabase();
-    });
-    document.addEventListener('visibilitychange', () => {
+    this.focusHandler = () => void this.syncFromDatabase().catch(() => undefined);
+    this.visibilityHandler = () => {
       if (document.visibilityState === 'visible') {
-        this.syncFromDatabase();
+        void this.syncFromDatabase().catch(() => undefined);
       }
-    });
-
-    // Periodic background safety poll every 20s in case proxy buffers SSE
-    setInterval(() => {
+    };
+    window.addEventListener('focus', this.focusHandler);
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+    this.pollTimer = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        this.syncFromDatabase();
+        void this.syncFromDatabase().catch(() => undefined);
       }
     }, 20000);
   }
@@ -375,9 +378,13 @@ class DataStore {
       this.penyakitList = storedPenyakit ? JSON.parse(storedPenyakit) : INITIAL_PENYAKIT;
 
       const storedPengaturan = localStorage.getItem(STORAGE_KEYS.PENGATURAN);
-      this.pengaturan = storedPengaturan
-        ? { ...INITIAL_PENGATURAN, ...JSON.parse(storedPengaturan) }
-        : INITIAL_PENGATURAN;
+      const storedSettings = storedPengaturan
+        ? { ...(JSON.parse(storedPengaturan) as Record<string, unknown>) }
+        : {};
+      delete storedSettings.password_hash;
+      delete storedSettings.supabase_url;
+      delete storedSettings.supabase_anon_key;
+      this.pengaturan = { ...INITIAL_PENGATURAN, ...storedSettings };
 
       const storedAudit = localStorage.getItem(STORAGE_KEYS.AUDIT_LOG);
       this.auditLogs = storedAudit ? JSON.parse(storedAudit) : [];
@@ -394,62 +401,89 @@ class DataStore {
     }
   }
 
+  public async importLocalDataToDatabase() {
+    if (typeof window === 'undefined') return { imported: false, initialImport: false };
+
+    const deviceKey = 'klinik_dompu_device_id_v1';
+    let deviceId = localStorage.getItem(deviceKey);
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem(deviceKey, deviceId);
+    }
+
+    const response = await this.apiFetch('/api/sync/legacy-import', {
+      method: 'POST',
+      body: JSON.stringify({
+        deviceId,
+        wbp: this.wbpList,
+        kunjungan: this.kunjunganList,
+        referensi: this.referensiList,
+        penyakit: this.penyakitList,
+        pengaturan: this.pengaturan,
+        sidb_history: this.sidbHistory,
+        audit_logs: this.auditLogs,
+      }),
+    });
+    if (!response.ok) throw new Error('Local data could not be imported.');
+    return response.json() as Promise<{ imported: boolean; initialImport: boolean }>;
+  }
+
+  public clearSensitiveData() {
+    this.stopRealtimeSync();
+    this.wbpList = [];
+    this.kunjunganList = [];
+    this.referensiList = [];
+    this.penyakitList = [];
+    this.pengaturan = INITIAL_PENGATURAN;
+    this.auditLogs = [];
+    this.sidbHistory = [];
+    this.saveToLocalStorage();
+    this.notifyListeners();
+  }
+
   public async syncFromDatabase(): Promise<void> {
     if (typeof window === 'undefined') return;
     if (this.syncInFlight) return this.syncInFlight;
 
     this.syncInFlight = (async () => {
       try {
-        const res = await fetch('/api/sync/state', { cache: 'no-store' });
-        if (!res.ok) return;
-        const snapshot = await res.json();
-
-        if (snapshot.version) {
-          this.lastKnownServerVersion = snapshot.version;
+        const response = await this.apiFetch('/api/sync/state', { cache: 'no-store' });
+        if (!response.ok) {
+          if (response.status === 401) window.dispatchEvent(new Event('clinic:session-expired'));
+          if (response.status === 428) window.dispatchEvent(new Event('clinic:password-change-required'));
+          throw new Error(`Database sync failed (${response.status}).`);
         }
+        const snapshot = await response.json();
 
+        if (snapshot.version) this.lastKnownServerVersion = snapshot.version;
         if (Array.isArray(snapshot.wbp)) {
           this.wbpList = snapshot.wbp.map((w: WbpItem) => {
             const room = (w.kamar || w.kamar_sidb || '').trim();
-            return {
-              ...w,
-              kamar: room,
-              blok: w.blok || determineBlokByKamar(room),
-            };
+            return { ...w, kamar: room, blok: w.blok || determineBlokByKamar(room) };
           });
         }
-
         if (Array.isArray(snapshot.kunjungan)) {
           this.kunjunganList = snapshot.kunjungan.map((k: KunjunganItem) => ({
             ...k,
             tanggal: normalizeDateIndo(k.tanggal),
           }));
         }
-
-        if (Array.isArray(snapshot.referensi) && snapshot.referensi.length > 0) {
-          this.referensiList = snapshot.referensi;
-        }
-
-        if (Array.isArray(snapshot.penyakit) && snapshot.penyakit.length > 0) {
-          this.penyakitList = snapshot.penyakit;
-        }
-
+        if (Array.isArray(snapshot.referensi)) this.referensiList = snapshot.referensi;
+        if (Array.isArray(snapshot.penyakit)) this.penyakitList = snapshot.penyakit;
         if (snapshot.pengaturan && typeof snapshot.pengaturan === 'object') {
-          this.pengaturan = { ...INITIAL_PENGATURAN, ...snapshot.pengaturan };
+          const settings = { ...(snapshot.pengaturan as Record<string, unknown>) };
+          delete settings.password_hash;
+          delete settings.supabase_url;
+          delete settings.supabase_anon_key;
+          this.pengaturan = { ...INITIAL_PENGATURAN, ...settings };
         }
-
-        if (Array.isArray(snapshot.sidb_history)) {
-          this.sidbHistory = snapshot.sidb_history;
-        }
-
-        if (Array.isArray(snapshot.audit_logs)) {
-          this.auditLogs = snapshot.audit_logs;
-        }
+        if (Array.isArray(snapshot.sidb_history)) this.sidbHistory = snapshot.sidb_history;
+        if (Array.isArray(snapshot.audit_logs)) this.auditLogs = snapshot.audit_logs;
 
         this.saveToLocalStorage();
         this.notifyListeners();
-      } catch {
-        // Silently continue with cached local data if offline
+      } catch (error) {
+        throw error;
       } finally {
         this.syncInFlight = null;
       }
@@ -459,17 +493,12 @@ class DataStore {
   }
 
   private saveToLocalStorage() {
-    try {
-      localStorage.setItem(STORAGE_KEYS.WBP, JSON.stringify(this.wbpList));
-      localStorage.setItem(STORAGE_KEYS.KUNJUNGAN, JSON.stringify(this.kunjunganList));
-      localStorage.setItem(STORAGE_KEYS.REFERENSI, JSON.stringify(this.referensiList));
-      localStorage.setItem(STORAGE_KEYS.PENYAKIT, JSON.stringify(this.penyakitList));
-      localStorage.setItem(STORAGE_KEYS.PENGATURAN, JSON.stringify(this.pengaturan));
-      localStorage.setItem(STORAGE_KEYS.AUDIT_LOG, JSON.stringify(this.auditLogs));
-      localStorage.setItem(STORAGE_KEYS.SIDB_HISTORY, JSON.stringify(this.sidbHistory));
-    } catch (e) {
-      console.error('Failed to save to localStorage', e);
-    }
+    if (typeof window === 'undefined') return;
+    Object.values(STORAGE_KEYS)
+      .filter((key) => ![STORAGE_KEYS.THEME].includes(key as typeof STORAGE_KEYS.THEME))
+      .forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem('klinik_dompu_auth_session');
+    sessionStorage.removeItem('klinik_dompu_auth_session');
   }
 
   public logAudit(aksi: string, rincian: string) {

@@ -135,6 +135,39 @@ export const sidbHistory = pgTable('sidb_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const katalogObat = pgTable('katalog_obat', {
+  id: text('id').primaryKey(),
+  no: integer('no').notNull().unique(),
+  namaTampilanObat: text('nama_tampilan_obat').notNull(),
+  namaDasar: text('nama_dasar').notNull(),
+  kekuatanSediaan: text('kekuatan_sediaan').notNull(),
+  satuanTerkecil: text('satuan_terkecil').notNull(),
+  isiPerKotak: integer('isi_per_kotak').notNull(),
+  satuanIsi: text('satuan_isi').notNull(),
+  status: text('status').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const clinicAuth = pgTable('clinic_auth', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  mustChangePassword: boolean('must_change_password').notNull().default(true),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const authSessions = pgTable('auth_sessions', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const appMigrations = pgTable('app_migrations', {
+  key: text('key').primaryKey(),
+  appliedAt: timestamp('applied_at').defaultNow(),
+});
+
 // Drizzle relations
 export const wbpRelations = relations(wbp, ({ many }) => ({
   kunjungan: many(kunjungan),

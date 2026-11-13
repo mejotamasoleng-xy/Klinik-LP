@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Plus,
 } from 'lucide-react';
-import { hashPassword, store, useStoreSync } from '../lib/storage';
+import { store, useStoreSync } from '../lib/storage';
+import { changePasswordWithSession } from '../lib/auth';
 import { BatchConfig } from '../types';
 import ReferencesManager from './ReferencesManager';
 import SidbUpdater from './SidbUpdater';
@@ -74,14 +75,8 @@ export default function SettingsModal() {
     e.preventDefault();
     setPassMsg(null);
 
-    const oldHash = await hashPassword(currentPass);
-    if (oldHash !== pengaturan.password_hash) {
-      setPassMsg({ type: 'error', text: 'Kata sandi lama tidak sesuai.' });
-      return;
-    }
-
-    if (newPass.length < 5) {
-      setPassMsg({ type: 'error', text: 'Kata sandi baru minimal 5 karakter.' });
+    if (newPass.length < 12) {
+      setPassMsg({ type: 'error', text: 'Kata sandi baru minimal 12 karakter.' });
       return;
     }
 
@@ -90,9 +85,12 @@ export default function SettingsModal() {
       return;
     }
 
-    const newHash = await hashPassword(newPass);
-    store.updatePengaturan({ password_hash: newHash });
-    store.logAudit('Ganti Password', 'Petugas berhasil memperbarui kata sandi akun bersama');
+    const result = await changePasswordWithSession(currentPass, newPass);
+    if (!result.success) {
+      setPassMsg({ type: 'error', text: result.message || 'Kata sandi belum dapat diperbarui.' });
+      return;
+    }
+
     setPassMsg({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
     setCurrentPass('');
     setNewPass('');
@@ -271,7 +269,7 @@ export default function SettingsModal() {
                 required
                 value={newPass}
                 onChange={(e) => setNewPass(e.target.value)}
-                placeholder="Minimal 5 karakter"
+                placeholder="Minimal 12 karakter"
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               />
             </div>

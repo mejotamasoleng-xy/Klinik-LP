@@ -314,10 +314,9 @@ export function exportComprehensiveBackupToExcel(backupData: {
   // 6. PENGATURAN_SISTEM
   const peng = backupData.pengaturan || {};
   const settingsRows = [
-    { Kunci: 'batas_sering_berobat_kali', Nilai: safeStr(peng.batas_sering_berobat_kali ?? 7) },
-    { Kunci: 'periode_sering_hari', Nilai: safeStr(peng.periode_sering_hari ?? 7) },
-    { Kunci: 'password_hash', Nilai: safeStr(peng.password_hash || '') },
-    { Kunci: 'preferensi_tema', Nilai: safeStr(backupData.preferences?.theme || 'light') },
+  { Kunci: 'batas_sering_berobat_kali', Nilai: safeStr(peng.batas_sering_berobat_kali ?? 7) },
+  { Kunci: 'periode_sering_hari', Nilai: safeStr(peng.periode_sering_hari ?? 7) },
+  { Kunci: 'preferensi_tema', Nilai: safeStr(backupData.preferences?.theme || 'light') },
     ...(Array.isArray(peng.batches)
       ? peng.batches.map((b: any, idx: number) => ({
           Kunci: `batch_${idx + 1}`,
