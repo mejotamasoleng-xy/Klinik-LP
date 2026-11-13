@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -27,7 +27,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { WbpItem } from '../types';
-import { calculateSisaBulan, calculateUsia, determineBlokByKamar, store } from '../lib/storage';
+import { calculateSisaBulan, calculateUsia, determineBlokByKamar, store, useStoreSync } from '../lib/storage';
 import { exportTableToExcel } from '../lib/excelExport';
 
 interface WbpDirectoryProps {
@@ -37,6 +37,7 @@ interface WbpDirectoryProps {
 type ViewMode = 'full' | 'compact';
 
 export default function WbpDirectory({ onSelectWbp }: WbpDirectoryProps) {
+  const storeVersion = useStoreSync();
   const [wbpList, setWbpList] = useState<WbpItem[]>(() => store.getWbpList());
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBatch, setFilterBatch] = useState<string>('Semua');
@@ -60,6 +61,10 @@ export default function WbpDirectory({ onSelectWbp }: WbpDirectoryProps) {
   const reloadData = () => {
     setWbpList(store.getWbpList());
   };
+
+  useEffect(() => {
+    reloadData();
+  }, [storeVersion]);
 
   const batches = store.getPengaturan().batches;
 

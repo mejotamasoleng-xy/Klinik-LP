@@ -6,7 +6,7 @@
 import React from 'react';
 import { X, Printer, ShieldCheck, Calendar, Clock, Stethoscope, AlertCircle } from 'lucide-react';
 import { WbpItem } from '../types';
-import { calculateSisaBulan, calculateUsia, getRelativeTime, store } from '../lib/storage';
+import { calculateSisaBulan, calculateUsia, getRelativeTime, store, useStoreSync } from '../lib/storage';
 
 interface MedicalRecordModalProps {
   wbp: WbpItem | null;
@@ -14,11 +14,13 @@ interface MedicalRecordModalProps {
 }
 
 export default function MedicalRecordModal({ wbp, onClose }: MedicalRecordModalProps) {
+  useStoreSync();
   if (!wbp) return null;
 
-  const dossier = store.getPatientMedicalRecord(wbp.id);
-  const usia = calculateUsia(wbp.tanggal_lahir);
-  const sisaBulan = wbp.tgl_ekspirasi ? calculateSisaBulan(wbp.tgl_ekspirasi) : null;
+  const currentWbp = store.getWbpById(wbp.id) || wbp;
+  const dossier = store.getPatientMedicalRecord(currentWbp.id);
+  const usia = calculateUsia(currentWbp.tanggal_lahir);
+  const sisaBulan = currentWbp.tgl_ekspirasi ? calculateSisaBulan(currentWbp.tgl_ekspirasi) : null;
   const pengaturan = store.getPengaturan();
 
   const handlePrint = () => {
@@ -85,22 +87,22 @@ export default function MedicalRecordModal({ wbp, onClose }: MedicalRecordModalP
                 KARTU REKAM MEDIS PASIEN RAWAT JALAN
               </span>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                {wbp.nama}
+                {currentWbp.nama}
               </h2>
             </div>
             <span
               className="px-2.5 py-1 text-xs font-semibold rounded border"
               style={{
                 backgroundColor:
-                  wbp.batch_bpjs === 'Juli' ? '#FFFF99' :
-                  wbp.batch_bpjs === 'Agustus' ? '#9FC5E8' :
-                  wbp.batch_bpjs === 'September' ? '#B6D7A8' :
-                  wbp.batch_bpjs === 'Oktober' ? '#FFB3DA' :
-                  wbp.batch_bpjs === 'November' ? '#F9CB9C' : '#E2E8F0',
+                  currentWbp.batch_bpjs === 'Juli' ? '#FFFF99' :
+                  currentWbp.batch_bpjs === 'Agustus' ? '#9FC5E8' :
+                  currentWbp.batch_bpjs === 'September' ? '#B6D7A8' :
+                  currentWbp.batch_bpjs === 'Oktober' ? '#FFB3DA' :
+                  currentWbp.batch_bpjs === 'November' ? '#F9CB9C' : '#E2E8F0',
                 color: '#1E293B',
               }}
             >
-              BPJS: {wbp.batch_bpjs}
+              BPJS: {currentWbp.batch_bpjs}
             </span>
           </div>
 
@@ -108,40 +110,40 @@ export default function MedicalRecordModal({ wbp, onClose }: MedicalRecordModalP
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Nomor Induk Kependudukan (NIK)</span>
-              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{wbp.nik || '-'}</span>
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{currentWbp.nik || '-'}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Nomor Registrasi Instansi</span>
-              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{wbp.no_reg_instansi || '-'}</span>
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{currentWbp.no_reg_instansi || '-'}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Tempat & Tanggal Lahir</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">{wbp.tempat_lahir || '-'}, {wbp.tanggal_lahir || '-'}</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{currentWbp.tempat_lahir || '-'}, {currentWbp.tanggal_lahir || '-'}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Usia / Jenis Kelamin</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">{usia} Tahun · {wbp.jenis_kelamin}</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{usia} Tahun · {currentWbp.jenis_kelamin}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Penempatan Blok / Kamar</span>
-              <span className="font-medium text-teal-700 dark:text-teal-400">{wbp.blok} / Kamar {wbp.kamar}</span>
+              <span className="font-medium text-teal-700 dark:text-teal-400">{currentWbp.blok} / Kamar {currentWbp.kamar}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Status / Kategori</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">{wbp.kategori} · {wbp.jenis_kejahatan}</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{currentWbp.kategori} · {currentWbp.jenis_kejahatan}</span>
             </div>
-            {wbp.tgl_ekspirasi && (
+            {currentWbp.tgl_ekspirasi && (
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-semibold">Tanggal Ekspirasi (Bebas)</span>
                 <span className="font-medium text-slate-800 dark:text-slate-200">
-                  {wbp.tgl_ekspirasi} {sisaBulan !== null ? `(${sisaBulan} bln lagi)` : ''}
+                  {currentWbp.tgl_ekspirasi} {sisaBulan !== null ? `(${sisaBulan} bln lagi)` : ''}
                 </span>
               </div>
             )}
-            {wbp.alamat && (
+            {currentWbp.alamat && (
               <div className="col-span-2">
                 <span className="text-slate-400 block text-[10px] uppercase font-semibold">Alamat Asal</span>
-                <span className="font-medium text-slate-800 dark:text-slate-200">{wbp.alamat}</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">{currentWbp.alamat}</span>
               </div>
             )}
           </div>

@@ -17,7 +17,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { exportRekapBulananToExcel } from '../lib/excelExport';
-import { parseDate, store, determineBlokByKamar } from '../lib/storage';
+import { parseDate, store, determineBlokByKamar, useStoreSync } from '../lib/storage';
 
 export interface ExcelCategoryGroup {
   kategori: string;
@@ -196,6 +196,7 @@ export const EXACT_88_DISEASES = EXACT_88_EXCEL_CATEGORIES.flatMap((c) =>
 );
 
 export default function MonthlyRecap() {
+  useStoreSync();
   const [selectedMonth, setSelectedMonth] = useState<number>(10); // Oktober
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);

@@ -22,24 +22,41 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Master Warga Binaan Pemasyarakatan (DATA_WBP)
+// Master Warga Binaan Pemasyarakatan (DATA_WBP - 30 Kolom Lengkap)
 export const wbp = pgTable('wbp', {
   id: text('id').primaryKey(),
-  nama: text('nama').notNull(),
+  no: integer('no'),
   nik: text('nik'),
   noRegInstansi: text('no_reg_instansi'),
+  nama: text('nama').notNull(),
+  jenisKelamin: text('jenis_kelamin').default('Laki-laki'),
   tempatLahir: text('tempat_lahir'),
   tanggalLahir: text('tanggal_lahir'),
+  alamat: text('alamat'),
+  namaAyah: text('nama_ayah'),
+  namaIbu: text('nama_ibu'),
+  pekerjaan: text('pekerjaan'),
+  jenisKejahatan: text('jenis_kejahatan'),
+  kategori: text('kategori').default('Narapidana'),
+  lamaPidana: text('lama_pidana'),
+  tanggalMasuk: text('tanggal_masuk'),
+  tglEkspirasi: text('tgl_ekspirasi'),
   blok: text('blok').default(''),
   kamar: text('kamar').default(''),
-  alamat: text('alamat'),
+  kamarSidb: text('kamar_sidb').default(''),
+  lokasiSel: text('lokasi_sel'),
+  tglSuratPenahanan: text('tgl_surat_penahanan'),
+  nomorSuratPenahanan: text('nomor_surat_penahanan'),
   statusData: text('status_data').default('Aktif'),
   batchBpjs: text('batch_bpjs').default('Belum masuk batch'),
-  perluDicek: boolean('perlu_dicek').default(false),
+  statusSkrining: text('status_skrining'),
   kendalaBpjs: text('kendala_bpjs'),
   dasarPbi: text('dasar_pbi'),
+  catatanPenggabungan: text('catatan_penggabungan'),
+  perluDicek: boolean('perlu_dicek').default(false),
   sumberUpdate: text('sumber_update'),
   terakhirDiperbarui: text('terakhir_diperbarui'),
+  dibuatPada: text('dibuat_pada'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -47,8 +64,9 @@ export const wbp = pgTable('wbp', {
 export const kunjungan = pgTable('kunjungan', {
   id: text('id').primaryKey(),
   tanggal: text('tanggal').notNull(), // dd/mm/yyyy
-  wbpId: text('wbp_id').references(() => wbp.id),
+  wbpId: text('wbp_id').references(() => wbp.id, { onDelete: 'set null' }),
   nama: text('nama').notNull(),
+  nik: text('nik'),
   kamar: text('kamar').default(''),
   keluhan1: text('keluhan1'),
   keluhan2: text('keluhan2'),
@@ -64,10 +82,12 @@ export const kunjungan = pgTable('kunjungan', {
   perawat: text('perawat'),
   catatan: text('catatan'),
   dihapus: boolean('dihapus').default(false),
+  dibuatPada: text('dibuat_pada'),
+  diubahPada: text('diubah_pada'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Master 88 Penyakit dalam 14 Kategori (DAFTAR_PENYAKIT)
+// Master 88+ Penyakit dalam 14 Kategori (DAFTAR_PENYAKIT)
 export const daftarPenyakit = pgTable('daftar_penyakit', {
   id: text('id').primaryKey(),
   kategori: text('kategori').notNull(),
@@ -100,6 +120,18 @@ export const auditLogs = pgTable('audit_logs', {
   aksi: text('aksi').notNull(),
   rincian: text('rincian').notNull(),
   perangkat: text('perangkat'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Riwayat Pembaruan SIDB
+export const sidbHistory = pgTable('sidb_history', {
+  id: text('id').primaryKey(),
+  tanggal: text('tanggal').notNull(),
+  namaFile: text('nama_file').notNull(),
+  totalBaris: integer('total_baris').default(0),
+  wbpBaru: integer('wbp_baru').default(0),
+  wbpDiperbarui: integer('wbp_diperbarui').default(0),
+  wbpDitandaiCek: integer('wbp_ditandai_cek').default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

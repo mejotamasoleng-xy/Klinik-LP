@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ShieldAlert,
   Users,
@@ -17,10 +17,11 @@ import {
   Filter,
 } from 'lucide-react';
 import { WbpItem } from '../types';
-import { store } from '../lib/storage';
+import { store, useStoreSync } from '../lib/storage';
 import { exportDaftarPanggilBpjsToExcel } from '../lib/excelExport';
 
 export default function BpjsDashboard() {
+  const storeVersion = useStoreSync();
   const [wbpList, setWbpList] = useState<WbpItem[]>(() => store.getWbpList());
   const [activeTab, setActiveTab] = useState<'ringkasan' | 'panggil' | 'semua'>('ringkasan');
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +33,10 @@ export default function BpjsDashboard() {
   const reloadData = () => {
     setWbpList(store.getWbpList());
   };
+
+  useEffect(() => {
+    reloadData();
+  }, [storeVersion]);
 
   const batches = store.getPengaturan().batches;
 

@@ -23,6 +23,9 @@ export const optionalOrRequiredAuth = async (
   }
 
   const token = authHeader.split('Bearer ')[1];
+  if (!adminAuth) {
+    return next();
+  }
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     req.user = decodedToken;

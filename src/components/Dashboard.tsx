@@ -34,7 +34,7 @@ import {
   FlameKindling,
   Grid3X3,
 } from 'lucide-react';
-import { parseDate, store, calculateUsia, determineBlokByKamar } from '../lib/storage';
+import { parseDate, store, calculateUsia, determineBlokByKamar, useStoreSync } from '../lib/storage';
 import { WbpItem, CalculatedKunjungan } from '../types';
 
 interface DashboardProps {
@@ -58,6 +58,7 @@ type FilterMode = 'bulan' | 'tahun' | 'custom';
 type HeatmapMetric = 'kunjungan' | 'pasienUnik';
 
 export default function Dashboard({ onNavigateToTab, onSelectWbp }: DashboardProps) {
+  useStoreSync();
   // Filter States: Bulan, Tahun, atau Rentang Tanggal Custom
   const [filterMode, setFilterMode] = useState<FilterMode>('bulan');
   const [selectedMonth, setSelectedMonth] = useState<number>(10); // Oktober bawaan

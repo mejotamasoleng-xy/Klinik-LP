@@ -8,7 +8,7 @@ import Header from './components/Header';
 import Sidebar, { TabKey } from './components/Sidebar';
 import LoginView from './components/LoginView';
 import { getCurrentSession, logoutSession } from './lib/auth';
-import { store } from './lib/storage';
+import { store, useStoreSync } from './lib/storage';
 import { WbpItem } from './types';
 
 // Keep infrequently used, data-heavy screens out of the initial bundle.
@@ -21,6 +21,7 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const MedicalRecordModal = lazy(() => import('./components/MedicalRecordModal'));
 
 export default function App() {
+  const storeVersion = useStoreSync();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return getCurrentSession() !== null;
   });
@@ -54,7 +55,14 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated) updateCounts();
-  }, [isAuthenticated, activeTab]);
+  }, [isAuthenticated, activeTab, storeVersion]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('klinik_dompu_theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      setDarkMode(savedTheme === 'dark');
+    }
+  }, [storeVersion]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -76,6 +84,10 @@ export default function App() {
       />
     );
   }
+
+  const freshSelectedPatient = selectedPatientForRecord
+    ? store.getWbpById(selectedPatientForRecord.id) || selectedPatientForRecord
+    : null;
 
   const tabLabels: Record<TabKey, string> = {
     input: 'Input Harian Pelayanan Medis',
@@ -112,8 +124,8 @@ export default function App() {
                 <Dashboard onNavigateToTab={setActiveTab} onSelectWbp={setSelectedPatientForRecord} />
               )}
               {activeTab === 'pengaturan' && <SettingsModal />}
-              {selectedPatientForRecord && (
-                <MedicalRecordModal wbp={selectedPatientForRecord} onClose={() => setSelectedPatientForRecord(null)} />
+              {freshSelectedPatient && (
+                <MedicalRecordModal wbp={freshSelectedPatient} onClose={() => setSelectedPatientForRecord(null)} />
               )}
             </Suspense>
           </div>

@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { drizzle } from 'drizzle-orm/node-postgres';
+import 'dotenv/config';
+import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.ts';
 
@@ -11,7 +12,17 @@ declare global {
   var _postgresPool: Pool | undefined;
 }
 
+export const hasSqlConfig = Boolean(
+  process.env.SQL_HOST &&
+    process.env.SQL_DB_NAME &&
+    process.env.SQL_USER &&
+    process.env.SQL_PASSWORD
+);
+
 export const createPool = () => {
+  if (!hasSqlConfig) {
+    return null;
+  }
   if (!global._postgresPool) {
     global._postgresPool = new Pool({
       host: process.env.SQL_HOST,
@@ -29,6 +40,20 @@ export const createPool = () => {
   return global._postgresPool;
 };
 
-const pool = createPool();
+let dbInstance: NodePgDatabase<typeof schema> | null = null;
 
-export const db = drizzle(pool, { schema });
+if (hasSqlConfig) {
+  try {
+    const pool = createPool();
+    if (pool) {
+      dbInstance = drizzle(pool, { schema });
+    }
+  } catch (err) {
+    console.warn('[AI Studio] Database initialization failed — using in-memory mock:', err);
+    dbInstance = null;
+  }
+} else {
+  console.warn('[AI Studio] SQL environment variables not configured — using in-memory database mock');
+}
+
+export const db = dbInstance;

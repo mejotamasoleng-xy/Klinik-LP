@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useEffect, useState } from 'react';
 import {
   CalculatedKunjungan,
   JenisPenyakit,
@@ -32,6 +33,7 @@ const STORAGE_KEYS = {
   SIDB_HISTORY: 'klinik_dompu_sidb_history_v1',
   SESSION: 'klinik_dompu_session_v1',
   FAILED_ATTEMPTS: 'klinik_dompu_failed_login_v1',
+  THEME: 'klinik_dompu_theme',
 };
 
 // SHA-256 helper
@@ -45,23 +47,20 @@ export async function hashPassword(password: string): Promise<string> {
 // Date helpers for dd/mm/yyyy
 export function parseDate(str: string): Date | null {
   if (!str) return null;
-  // Specific fix for user's October dataset: if stored as 10/01/2026, it represents 1 Oktober 2026
   if (str === '10/01/2026' || str === '2026-01-10') {
-    return new Date(2026, 9, 1); // 1 Oktober 2026
+    return new Date(2026, 9, 1);
   }
   const parts = str.split('/');
   if (parts.length === 3) {
     let day = parseInt(parts[0], 10);
     let month = parseInt(parts[1], 10) - 1;
     let year = parseInt(parts[2], 10);
-    // If year 2026 and month was set to January (0) with day 10, auto-correct to 1 Oktober 2026
     if (year === 2026 && month === 0 && day === 10) {
       day = 1;
       month = 9;
     }
     return new Date(year, month, day);
   }
-  // Try ISO format
   const iso = new Date(str);
   return isNaN(iso.getTime()) ? null : iso;
 }
@@ -73,10 +72,6 @@ export function formatDateIndo(date: Date): string {
   return `${d}/${m}/${y}`;
 }
 
-/**
- * Normalizes any date input (DD/MM/YYYY, YYYY-MM-DD, Date object) strictly to dd/mm/yyyy.
- * Specifically corrects inverted day/month from US XLSX parsing (e.g. 10/01/2026 -> 01/10/2026).
- */
 export function normalizeDateIndo(raw: any): string {
   if (!raw) return '';
   if (raw instanceof Date) {
@@ -88,12 +83,10 @@ export function normalizeDateIndo(raw: any): string {
   const str = String(raw).trim();
   if (!str) return '';
 
-  // Inverted month/day fix for October 2026 data
   if (str === '10/01/2026' || str === '2026-01-10' || str.startsWith('2026-01-10T')) {
     return '01/10/2026';
   }
 
-  // Handle dd/mm/yyyy or d/m/yyyy
   if (str.includes('/')) {
     const parts = str.split('/');
     if (parts.length === 3) {
@@ -102,7 +95,6 @@ export function normalizeDateIndo(raw: any): string {
       let year = parseInt(parts[2], 10);
       if (year < 100) year += 2000;
 
-      // Inverted check: if day is 10 and month is 1 in 2026, flip to 01/10/2026
       if (year === 2026 && month === 1 && day === 10) {
         day = 1;
         month = 10;
@@ -112,7 +104,6 @@ export function normalizeDateIndo(raw: any): string {
     }
   }
 
-  // Handle yyyy-mm-dd or yyyy-mm-ddThh:mm:ss
   if (str.includes('-')) {
     const cleanDate = str.split('T')[0];
     const parts = cleanDate.split('-');
@@ -121,7 +112,6 @@ export function normalizeDateIndo(raw: any): string {
       let month = parseInt(parts[1], 10);
       let day = parseInt(parts[2], 10);
 
-      // Inverted check: 2026-01-10 was meant to be 01/10/2026
       if (year === 2026 && month === 1 && day === 10) {
         day = 1;
         month = 10;
@@ -143,13 +133,6 @@ export function getTodayFormatted(): string {
   return formatDateIndo(new Date());
 }
 
-/**
- * Menentukan Blok Hunian secara otomatis berdasarkan Nama Kamar.
- * Aturan Lapas Dompu:
- * - BLOK ATAS : Kamar Tamping, Kamar 8, Kamar 9, Kamar 10, Kamar 11, Kamar 12, Kamar 13, Kamar 14
- * - BLOK BAWAH: Kamar Lansia, Kamar 1, Kamar 2, Kamar 3, Kamar MAXIMUM / Kamar 4, Kamar 5, Kamar 6, Kamar 7
- * - Tanpa nama kamar / kamar kosong -> data Blok diubah jadi kosong ('')
- */
 export function determineBlokByKamar(kamar: string | undefined | null): string {
   if (!kamar) return '';
   const clean = String(kamar).trim().toLowerCase();
@@ -164,7 +147,6 @@ export function determineBlokByKamar(kamar: string | undefined | null): string {
     return '';
   }
 
-  // Kata kunci khusus
   if (clean.includes('tamping')) {
     return 'Blok Atas';
   }
@@ -177,26 +159,21 @@ export function determineBlokByKamar(kamar: string | undefined | null): string {
     return 'Blok Bawah';
   }
 
-  // Cek nomor kamar (misal: "8", "Kamar 8", "14", "1", "4", dsb)
   const numMatch = clean.match(/\b\d+\b/) || clean.match(/\d+/);
   if (numMatch) {
     const num = parseInt(numMatch[0], 10);
-    // BLOK ATAS: 8, 9, 10, 11, 12, 13, 14
     if (num >= 8 && num <= 14) {
       return 'Blok Atas';
     }
-    // BLOK BAWAH: 1, 2, 3, 4, 5, 6, 7
     if (num >= 1 && num <= 7) {
       return 'Blok Bawah';
     }
   }
 
-  // Jika nama kamar tidak masuk ke kategori di atas atau tidak ada kamar valid
   return '';
 }
 
 export function dateToInputFormat(str: string): string {
-  // convert dd/mm/yyyy to yyyy-mm-dd for <input type="date">
   if (!str) return '';
   const parts = str.split('/');
   if (parts.length === 3) {
@@ -206,7 +183,6 @@ export function dateToInputFormat(str: string): string {
 }
 
 export function inputFormatToDate(str: string): string {
-  // convert yyyy-mm-dd to dd/mm/yyyy
   if (!str) return '';
   const parts = str.split('-');
   if (parts.length === 3) {
@@ -251,7 +227,7 @@ export function getRelativeTime(dateStr: string): string {
   return `${Math.floor(diffDays / 365)} tahun lalu`;
 }
 
-// Storage Manager
+// Storage & Cross-Device Real-Time Sync Manager
 class DataStore {
   private wbpList: WbpItem[] = [];
   private kunjunganList: KunjunganItem[] = [];
@@ -260,34 +236,137 @@ class DataStore {
   private pengaturan: PengaturanApp = INITIAL_PENGATURAN;
   private auditLogs: AuditLog[] = [];
   private sidbHistory: SidbUpdateHistory[] = [];
-  private isLoaded = false;
+  private listeners = new Set<() => void>();
+  private version = 0;
+  private syncInFlight: Promise<void> | null = null;
+  private lastKnownServerVersion = 0;
+  private eventSource: EventSource | null = null;
+  private clientId: string;
 
   constructor() {
+    this.clientId =
+      typeof window !== 'undefined'
+        ? 'client-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+        : 'ssr';
     this.loadFromLocalStorage();
+    if (typeof window !== 'undefined') {
+      this.initRealtimeSync();
+    }
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  public getVersion(): number {
+    return this.version;
+  }
+
+  private notifyListeners() {
+    this.version += 1;
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('Store listener error:', err);
+      }
+    });
+  }
+
+  private apiFetch(url: string, options: RequestInit = {}) {
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string> | undefined),
+      'X-Client-Id': this.clientId,
+    };
+    if (options.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return fetch(url, { ...options, headers });
+  }
+
+  private initRealtimeSync() {
+    // Initial pull from Cloud SQL
+    this.syncFromDatabase();
+
+    // Real-time Server-Sent Events subscription
+    const connectSse = () => {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+      try {
+        const es = new EventSource('/api/events');
+        this.eventSource = es;
+
+        es.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'connected') {
+              if (msg.version && msg.version > this.lastKnownServerVersion) {
+                this.syncFromDatabase();
+              }
+            } else if (msg.type === 'sync') {
+              if (msg.sourceClientId !== this.clientId) {
+                this.syncFromDatabase();
+              }
+            }
+          } catch {
+            // ignore malformed heartbeat
+          }
+        };
+
+        es.onerror = () => {
+          es.close();
+          this.eventSource = null;
+          setTimeout(connectSse, 5000);
+        };
+      } catch {
+        // ignore if EventSource unavailable
+      }
+    };
+
+    connectSse();
+
+    // Refresh when tab/window regains focus or visibility
+    window.addEventListener('focus', () => {
+      this.syncFromDatabase();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.syncFromDatabase();
+      }
+    });
+
+    // Periodic background safety poll every 20s in case proxy buffers SSE
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        this.syncFromDatabase();
+      }
+    }, 20000);
   }
 
   private loadFromLocalStorage() {
     try {
       const storedWbp = localStorage.getItem(STORAGE_KEYS.WBP);
       const rawWbp: WbpItem[] = storedWbp ? JSON.parse(storedWbp) : INITIAL_WBP;
-      // Auto-normalize room and block based on Lapas Dompu rules
       this.wbpList = rawWbp.map((w) => {
         const room = (w.kamar || w.kamar_sidb || '').trim();
-        const autoBlok = determineBlokByKamar(room);
         return {
           ...w,
           kamar: room,
-          blok: autoBlok,
+          blok: determineBlokByKamar(room),
         };
       });
 
       const storedKunjungan = localStorage.getItem(STORAGE_KEYS.KUNJUNGAN);
-      this.kunjunganList = storedKunjungan ? JSON.parse(storedKunjungan) : INITIAL_KUNJUNGAN;
-      // Auto-correct any legacy dates (such as 10/01/2026 inverted to 01/10/2026)
-      this.kunjunganList = this.kunjunganList.map((k) => ({
-        ...k,
-        tanggal: normalizeDateIndo(k.tanggal),
-      }));
+      this.kunjunganList = (storedKunjungan ? JSON.parse(storedKunjungan) : INITIAL_KUNJUNGAN).map(
+        (k: KunjunganItem) => ({
+          ...k,
+          tanggal: normalizeDateIndo(k.tanggal),
+        })
+      );
 
       const storedRef = localStorage.getItem(STORAGE_KEYS.REFERENSI);
       this.referensiList = storedRef ? JSON.parse(storedRef) : INITIAL_REFERENSI;
@@ -296,18 +375,15 @@ class DataStore {
       this.penyakitList = storedPenyakit ? JSON.parse(storedPenyakit) : INITIAL_PENYAKIT;
 
       const storedPengaturan = localStorage.getItem(STORAGE_KEYS.PENGATURAN);
-      this.pengaturan = storedPengaturan ? { ...INITIAL_PENGATURAN, ...JSON.parse(storedPengaturan) } : INITIAL_PENGATURAN;
+      this.pengaturan = storedPengaturan
+        ? { ...INITIAL_PENGATURAN, ...JSON.parse(storedPengaturan) }
+        : INITIAL_PENGATURAN;
 
       const storedAudit = localStorage.getItem(STORAGE_KEYS.AUDIT_LOG);
       this.auditLogs = storedAudit ? JSON.parse(storedAudit) : [];
 
       const storedSidbHistory = localStorage.getItem(STORAGE_KEYS.SIDB_HISTORY);
       this.sidbHistory = storedSidbHistory ? JSON.parse(storedSidbHistory) : [];
-
-      this.isLoaded = true;
-
-      // Asynchronously sync with Cloud SQL backend
-      this.syncFromDatabase();
     } catch (e) {
       console.error('Failed to load storage, initializing with defaults', e);
       this.wbpList = INITIAL_WBP;
@@ -318,83 +394,68 @@ class DataStore {
     }
   }
 
-  public async syncFromDatabase() {
-    try {
-      if (typeof window === 'undefined') return;
-      const resWbp = await fetch('/api/wbp');
-      if (resWbp.ok) {
-        const dbWbp = await resWbp.json();
-        if (Array.isArray(dbWbp) && dbWbp.length > 0) {
-          // Merge WBP
-          const existingIds = new Set(this.wbpList.map((w) => w.id));
-          dbWbp.forEach((dw: any) => {
-            if (!existingIds.has(dw.id)) {
-              this.wbpList.push({
-                id: dw.id,
-                no: this.wbpList.length + 1,
-                nama: dw.nama,
-                nik: dw.nik || '',
-                no_reg_instansi: dw.noRegInstansi || '',
-                jenis_kelamin: 'Laki-laki',
-                tempat_lahir: dw.tempatLahir || '',
-                tanggal_lahir: dw.tanggalLahir || '',
-                blok: dw.blok || '',
-                kamar: dw.kamar || '',
-                kamar_sidb: dw.kamar || '',
-                alamat: dw.alamat || '',
-                jenis_kejahatan: 'Umum',
-                kategori: 'Narapidana',
-                status_data: dw.statusData || 'Aktif',
-                batch_bpjs: dw.batchBpjs || 'Belum masuk batch',
-                perlu_dicek: Boolean(dw.perluDicek),
-                kendala_bpjs: dw.kendalaBpjs,
-                dasar_pbi: dw.dasarPbi,
-                sumber_update: dw.sumberUpdate,
-                terakhir_diperbarui: dw.terakhirDiperbarui,
-              });
-            }
+  public async syncFromDatabase(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    if (this.syncInFlight) return this.syncInFlight;
+
+    this.syncInFlight = (async () => {
+      try {
+        const res = await fetch('/api/sync/state', { cache: 'no-store' });
+        if (!res.ok) return;
+        const snapshot = await res.json();
+
+        if (snapshot.version) {
+          this.lastKnownServerVersion = snapshot.version;
+        }
+
+        if (Array.isArray(snapshot.wbp)) {
+          this.wbpList = snapshot.wbp.map((w: WbpItem) => {
+            const room = (w.kamar || w.kamar_sidb || '').trim();
+            return {
+              ...w,
+              kamar: room,
+              blok: w.blok || determineBlokByKamar(room),
+            };
           });
         }
-      }
 
-      const resKunjungan = await fetch('/api/kunjungan');
-      if (resKunjungan.ok) {
-        const dbKunjungan = await resKunjungan.json();
-        if (Array.isArray(dbKunjungan) && dbKunjungan.length > 0) {
-          const existingKIds = new Set(this.kunjunganList.map((k) => k.id));
-          dbKunjungan.forEach((dk: any) => {
-            if (!existingKIds.has(dk.id)) {
-              this.kunjunganList.unshift({
-                id: dk.id,
-                tanggal: normalizeDateIndo(dk.tanggal),
-                wbp_id: dk.wbpId,
-                nama: dk.nama,
-                kamar: dk.kamar,
-                keluhan1: dk.keluhan1,
-                keluhan2: dk.keluhan2,
-                keluhan3: dk.keluhan3,
-                penyakit1: dk.penyakit1,
-                jenis1: dk.jenis1,
-                penyakit2: dk.penyakit2,
-                jenis2: dk.jenis2,
-                penyakit3: dk.penyakit3,
-                jenis3: dk.jenis3,
-                terapi: dk.terapi,
-                dokter_pemeriksa: dk.dokterPemeriksa,
-                perawat: dk.perawat,
-                catatan: dk.catatan,
-                dihapus: Boolean(dk.dihapus),
-                dibuat_pada: dk.createdAt,
-              });
-            }
-          });
+        if (Array.isArray(snapshot.kunjungan)) {
+          this.kunjunganList = snapshot.kunjungan.map((k: KunjunganItem) => ({
+            ...k,
+            tanggal: normalizeDateIndo(k.tanggal),
+          }));
         }
-      }
 
-      this.saveToLocalStorage();
-    } catch (e) {
-      // In offline or initial startup mode, silently continue with local data
-    }
+        if (Array.isArray(snapshot.referensi) && snapshot.referensi.length > 0) {
+          this.referensiList = snapshot.referensi;
+        }
+
+        if (Array.isArray(snapshot.penyakit) && snapshot.penyakit.length > 0) {
+          this.penyakitList = snapshot.penyakit;
+        }
+
+        if (snapshot.pengaturan && typeof snapshot.pengaturan === 'object') {
+          this.pengaturan = { ...INITIAL_PENGATURAN, ...snapshot.pengaturan };
+        }
+
+        if (Array.isArray(snapshot.sidb_history)) {
+          this.sidbHistory = snapshot.sidb_history;
+        }
+
+        if (Array.isArray(snapshot.audit_logs)) {
+          this.auditLogs = snapshot.audit_logs;
+        }
+
+        this.saveToLocalStorage();
+        this.notifyListeners();
+      } catch {
+        // Silently continue with cached local data if offline
+      } finally {
+        this.syncInFlight = null;
+      }
+    })();
+
+    return this.syncInFlight;
   }
 
   private saveToLocalStorage() {
@@ -424,12 +485,11 @@ class DataStore {
       this.auditLogs = this.auditLogs.slice(0, 500);
     }
     this.saveToLocalStorage();
+    this.notifyListeners();
 
-    // Async push to Cloud SQL audit log
     if (typeof window !== 'undefined') {
-      fetch('/api/audit', {
+      this.apiFetch('/api/audit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),
       }).catch(() => {});
     }
@@ -437,10 +497,16 @@ class DataStore {
 
   // WBP Methods
   public getWbpList(): WbpItem[] {
-    // Dynamically calculate latest room based on most recent visit with a room
     return this.wbpList.map((w) => {
       const latestVisitWithRoom = this.kunjunganList
-        .filter((k) => !k.dihapus && (k.wbp_id === w.id || k.nama?.trim().toLowerCase() === w.nama?.trim().toLowerCase()) && k.kamar && k.kamar.trim() && k.kamar.trim() !== '-')
+        .filter(
+          (k) =>
+            !k.dihapus &&
+            (k.wbp_id === w.id || k.nama?.trim().toLowerCase() === w.nama?.trim().toLowerCase()) &&
+            k.kamar &&
+            k.kamar.trim() &&
+            k.kamar.trim() !== '-'
+        )
         .sort((a, b) => {
           const dateA = parseDate(a.tanggal)?.getTime() || 0;
           const dateB = parseDate(b.tanggal)?.getTime() || 0;
@@ -458,18 +524,17 @@ class DataStore {
   }
 
   public getWbpById(id: string): WbpItem | undefined {
-    const list = this.getWbpList();
-    return list.find((w) => w.id === id);
+    return this.getWbpList().find((w) => w.id === id);
   }
 
   public findWbpByNameOrNik(query: string): WbpItem[] {
     const clean = query.trim().toLowerCase();
     if (!clean) return [];
-    const list = this.getWbpList();
-    return list.filter((w) =>
-      w.nama.toLowerCase().includes(clean) ||
-      (w.nik && w.nik.toLowerCase().includes(clean)) ||
-      (w.no_reg_instansi && w.no_reg_instansi.toLowerCase().includes(clean))
+    return this.getWbpList().filter(
+      (w) =>
+        w.nama.toLowerCase().includes(clean) ||
+        (w.nik && w.nik.toLowerCase().includes(clean)) ||
+        (w.no_reg_instansi && w.no_reg_instansi.toLowerCase().includes(clean))
     );
   }
 
@@ -486,28 +551,51 @@ class DataStore {
       blok: autoBlok,
       kamar_sidb: item.kamar_sidb || cleanRoom,
       dibuat_pada: new Date().toISOString(),
+      terakhir_diperbarui: new Date().toISOString(),
     };
     this.wbpList.push(newItem);
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch('/api/wbp', {
+        method: 'POST',
+        body: JSON.stringify(newItem),
+      }).catch((err) => console.error('Failed to sync addWbp:', err));
+    }
+
     this.logAudit('Tambah WBP', `Menambah data WBP: ${newItem.nama} (NIK: ${newItem.nik})`);
     return newItem;
   }
 
-  public updateWbp(id: string, updates: Partial<WbpItem>): WbpItem | null {
+  public updateWbp(id: string, updates: Partial<WbpItem>, syncToServer = true): WbpItem | null {
     const idx = this.wbpList.findIndex((w) => w.id === id);
     if (idx === -1) return null;
     const finalKamar = updates.kamar !== undefined ? updates.kamar.trim() : (this.wbpList[idx].kamar || '').trim();
-    const finalBlok = updates.kamar !== undefined
-      ? determineBlokByKamar(finalKamar)
-      : (updates.blok !== undefined ? updates.blok : determineBlokByKamar(finalKamar));
+    const finalBlok =
+      updates.kamar !== undefined
+        ? determineBlokByKamar(finalKamar)
+        : updates.blok !== undefined
+          ? updates.blok
+          : determineBlokByKamar(finalKamar);
 
     this.wbpList[idx] = {
       ...this.wbpList[idx],
       ...updates,
       kamar: finalKamar,
       blok: finalBlok,
+      terakhir_diperbarui: new Date().toISOString(),
     };
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (syncToServer && typeof window !== 'undefined') {
+      this.apiFetch(`/api/wbp/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(this.wbpList[idx]),
+      }).catch((err) => console.error('Failed to sync updateWbp:', err));
+    }
+
     this.logAudit('Ubah WBP', `Memperbarui data WBP: ${this.wbpList[idx].nama}`);
     return this.wbpList[idx];
   }
@@ -517,28 +605,123 @@ class DataStore {
     if (idx === -1) return false;
     const deleted = this.wbpList.splice(idx, 1)[0];
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/wbp/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch((err) => console.error('Failed to sync deleteWbp:', err));
+    }
+
     this.logAudit('Hapus WBP', `Menghapus WBP: ${deleted.nama}`);
     return true;
   }
 
+  public async applySidbUpdates(params: {
+    newWbp: WbpItem[];
+    updatedWbp: WbpItem[];
+    missingIds: string[];
+    history: Omit<SidbUpdateHistory, 'id'>;
+  }) {
+    const nowIso = new Date().toISOString();
+    const changedItems: WbpItem[] = [];
+
+    params.newWbp.forEach((w) => {
+      const cleanRoom = (w.kamar || w.kamar_sidb || '').trim();
+      const item: WbpItem = {
+        ...w,
+        kamar: cleanRoom,
+        blok: determineBlokByKamar(cleanRoom),
+        sumber_update: 'SIDB',
+        terakhir_diperbarui: nowIso,
+        dibuat_pada: w.dibuat_pada || nowIso,
+      };
+      this.wbpList.push(item);
+      changedItems.push(item);
+    });
+
+    params.updatedWbp.forEach((u) => {
+      const idx = this.wbpList.findIndex((w) => w.id === u.id);
+      if (idx !== -1) {
+        const cleanRoom = (u.kamar || u.kamar_sidb || '').trim();
+        this.wbpList[idx] = {
+          ...this.wbpList[idx],
+          ...u,
+          kamar: cleanRoom,
+          blok: determineBlokByKamar(cleanRoom),
+          sumber_update: 'SIDB',
+          terakhir_diperbarui: nowIso,
+        };
+        changedItems.push(this.wbpList[idx]);
+      }
+    });
+
+    params.missingIds.forEach((id) => {
+      const idx = this.wbpList.findIndex((w) => w.id === id);
+      if (idx !== -1) {
+        this.wbpList[idx] = {
+          ...this.wbpList[idx],
+          perlu_dicek: true,
+          sumber_update: 'SIDB',
+          terakhir_diperbarui: nowIso,
+        };
+        changedItems.push(this.wbpList[idx]);
+      }
+    });
+
+    const histItem: SidbUpdateHistory = {
+      ...params.history,
+      id: 'sidb-' + Date.now(),
+    };
+    this.sidbHistory.unshift(histItem);
+    this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      try {
+        if (changedItems.length > 0) {
+          await this.apiFetch('/api/wbp/batch', {
+            method: 'POST',
+            body: JSON.stringify(changedItems),
+          });
+        }
+        await this.apiFetch('/api/sidb-history', {
+          method: 'POST',
+          body: JSON.stringify(histItem),
+        });
+      } catch (err) {
+        console.error('Failed to sync SIDB updates:', err);
+      }
+    }
+
+    this.logAudit(
+      'Update SIDB',
+      `Sinkronisasi SIDB "${params.history.nama_file}": +${params.newWbp.length} baru, ${params.updatedWbp.length} diperbarui, ${params.missingIds.length} dicek`
+    );
+  }
+
   public async bulkImportWbp(items: WbpItem[], replaceAll = false) {
+    const nowIso = new Date().toISOString();
     const normalizedItems = items.map((w) => {
       const room = (w.kamar || w.kamar_sidb || '').trim();
       return {
         ...w,
         kamar: room,
         blok: determineBlokByKamar(room),
+        sumber_update: w.sumber_update || 'Impor',
+        terakhir_diperbarui: nowIso,
+        dibuat_pada: w.dibuat_pada || nowIso,
       };
     });
 
     if (replaceAll) {
       this.wbpList = normalizedItems;
     } else {
-      // Upsert by NIK or matching name
       for (const item of normalizedItems) {
-        const existingIdx = this.wbpList.findIndex((w) =>
-          (w.nik && item.nik && w.nik === item.nik) ||
-          w.nama.trim().toLowerCase() === item.nama.trim().toLowerCase()
+        const existingIdx = this.wbpList.findIndex(
+          (w) =>
+            (w.nik && item.nik && w.nik === item.nik) ||
+            w.nama.trim().toLowerCase() === item.nama.trim().toLowerCase()
         );
         if (existingIdx !== -1) {
           this.wbpList[existingIdx] = { ...this.wbpList[existingIdx], ...item };
@@ -548,42 +731,26 @@ class DataStore {
       }
     }
     this.saveToLocalStorage();
-    this.logAudit('Impor WBP', `Mengimpor ${items.length} WBP (${replaceAll ? 'Timpa Semua' : 'Tambah/Perbarui'})`);
+    this.notifyListeners();
 
-    // Sync to Cloud SQL PostgreSQL for cross-device access
     if (typeof window !== 'undefined') {
       try {
         if (replaceAll) {
-          await fetch('/api/wbp/all', { method: 'DELETE' });
+          await this.apiFetch('/api/wbp/all', { method: 'DELETE' });
         }
-        await fetch('/api/wbp/batch', {
+        await this.apiFetch('/api/wbp/batch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            this.wbpList.map((w) => ({
-              id: w.id,
-              nama: w.nama,
-              nik: w.nik || '',
-              noRegInstansi: w.no_reg_instansi || '',
-              tempatLahir: w.tempat_lahir || '',
-              tanggalLahir: w.tanggal_lahir || '',
-              blok: w.blok || '',
-              kamar: w.kamar || '',
-              alamat: w.alamat || '',
-              statusData: w.status_data || 'Aktif',
-              batchBpjs: w.batch_bpjs || 'Belum masuk batch',
-              perluDicek: Boolean(w.perlu_dicek),
-              kendalaBpjs: w.kendala_bpjs || '',
-              dasarPbi: w.dasar_pbi || '',
-              sumberUpdate: w.sumber_update || 'Impor',
-              terakhirDiperbarui: new Date().toISOString(),
-            }))
-          ),
+          body: JSON.stringify(this.wbpList),
         });
       } catch (err) {
         console.error('Failed to sync WBP to backend:', err);
       }
     }
+
+    this.logAudit(
+      'Impor WBP',
+      `Mengimpor ${items.length} WBP (${replaceAll ? 'Timpa Semua' : 'Tambah/Perbarui'})`
+    );
   }
 
   // Kunjungan Methods
@@ -602,32 +769,28 @@ class DataStore {
 
     const filtered = includeDeleted ? this.kunjunganList : this.kunjunganList.filter((k) => !k.dihapus);
 
-    // Calculate duplicates & frequency
     return filtered.map((k) => {
-      // Find WBP
       let wbp = wbpMap.get(k.wbp_id);
       if (!wbp && k.nama) {
         wbp = wbpNameMap.get(k.nama.trim().toLowerCase());
       }
 
-      // Resolve complaints against Referensi
       const ref1 = this.resolveComplaint(k.keluhan1);
       const ref2 = this.resolveComplaint(k.keluhan2);
       const ref3 = this.resolveComplaint(k.keluhan3);
 
-      // Duplicate check: same patient visited on the same date more than once
       const dateStr = k.tanggal;
       const duplicates = this.kunjunganList.filter((other) => {
         if (other.dihapus) return false;
         if (other.id === k.id) return false;
         if (other.tanggal !== dateStr) return false;
-        const matchesId = (k.wbp_id && other.wbp_id && k.wbp_id === other.wbp_id);
-        const matchesName = (k.nama && other.nama && k.nama.trim().toLowerCase() === other.nama.trim().toLowerCase());
+        const matchesId = k.wbp_id && other.wbp_id && k.wbp_id === other.wbp_id;
+        const matchesName =
+          k.nama && other.nama && k.nama.trim().toLowerCase() === other.nama.trim().toLowerCase();
         return matchesId || matchesName;
       });
       const is_duplicate = duplicates.length > 0;
 
-      // Frequent visitor check: N visits in last M days
       const kDate = parseDate(k.tanggal);
       let is_frequent = false;
       let frequent_count = 0;
@@ -640,7 +803,8 @@ class DataStore {
           if (other.dihapus) return false;
           const otherDate = parseDate(other.tanggal);
           if (!otherDate) return false;
-          const matches = (k.wbp_id && other.wbp_id && k.wbp_id === other.wbp_id) ||
+          const matches =
+            (k.wbp_id && other.wbp_id && k.wbp_id === other.wbp_id) ||
             (k.nama && other.nama && k.nama.trim().toLowerCase() === other.nama.trim().toLowerCase());
           if (!matches) return false;
           const t = otherDate.getTime();
@@ -688,12 +852,9 @@ class DataStore {
       return { penyakit: '' };
     }
     const clean = keluhan.trim().toLowerCase();
-    const found = this.referensiList.find(
-      (r) => r.keluhan.trim().toLowerCase() === clean
-    );
+    const found = this.referensiList.find((r) => r.keluhan.trim().toLowerCase() === clean);
 
     if (found) {
-      // Find current jenis from Penyakit master list to ensure dynamic update
       let currentJenis = found.jenis;
       if (found.masuk_penyakit) {
         const pen = this.penyakitList.find(
@@ -728,14 +889,15 @@ class DataStore {
     };
     this.kunjunganList.unshift(item);
 
-    // If room is provided, update WBP current room and automatically calculate its block
     const cleanKamar = (k.kamar || '').trim();
     if (cleanKamar) {
       const autoBlok = determineBlokByKamar(cleanKamar);
       if (k.wbp_id) {
         this.updateWbp(k.wbp_id, { kamar: cleanKamar, blok: autoBlok });
       } else if (k.nama) {
-        const matchedWbp = this.wbpList.find((w) => w.nama.trim().toLowerCase() === k.nama.trim().toLowerCase());
+        const matchedWbp = this.wbpList.find(
+          (w) => w.nama.trim().toLowerCase() === k.nama.trim().toLowerCase()
+        );
         if (matchedWbp) {
           this.updateWbp(matchedWbp.id, { kamar: cleanKamar, blok: autoBlok });
         }
@@ -743,37 +905,16 @@ class DataStore {
     }
 
     this.saveToLocalStorage();
-    this.logAudit('Tambah Kunjungan', `Kunjungan pasien: ${k.nama} pada tanggal ${k.tanggal}`);
+    this.notifyListeners();
 
-    // Asynchronously push to Cloud SQL database
     if (typeof window !== 'undefined') {
-      fetch('/api/kunjungan', {
+      this.apiFetch('/api/kunjungan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: item.id,
-          tanggal: item.tanggal,
-          wbpId: item.wbp_id || null,
-          nama: item.nama,
-          kamar: item.kamar,
-          keluhan1: item.keluhan1,
-          keluhan2: item.keluhan2,
-          keluhan3: item.keluhan3,
-          penyakit1: item.penyakit1,
-          jenis1: item.jenis1,
-          penyakit2: item.penyakit2,
-          jenis2: item.jenis2,
-          penyakit3: item.penyakit3,
-          jenis3: item.jenis3,
-          terapi: item.terapi,
-          dokterPemeriksa: item.dokter_pemeriksa,
-          perawat: item.perawat,
-          catatan: item.catatan,
-          dihapus: false,
-        }),
-      }).catch(() => {});
+        body: JSON.stringify(item),
+      }).catch((err) => console.error('Failed to sync addKunjungan:', err));
     }
 
+    this.logAudit('Tambah Kunjungan', `Kunjungan pasien: ${k.nama} pada tanggal ${k.tanggal}`);
     return item;
   }
 
@@ -793,13 +934,24 @@ class DataStore {
       if (targetWbpId) {
         this.updateWbp(targetWbpId, { kamar: cleanKamar, blok: autoBlok });
       } else if (targetName) {
-        const matchedWbp = this.wbpList.find((w) => w.nama.trim().toLowerCase() === targetName.trim().toLowerCase());
+        const matchedWbp = this.wbpList.find(
+          (w) => w.nama.trim().toLowerCase() === targetName.trim().toLowerCase()
+        );
         if (matchedWbp) {
           this.updateWbp(matchedWbp.id, { kamar: cleanKamar, blok: autoBlok });
         }
       }
     }
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/kunjungan/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(this.kunjunganList[idx]),
+      }).catch((err) => console.error('Failed to sync updateKunjungan:', err));
+    }
+
     this.logAudit('Ubah Kunjungan', `Memperbarui kunjungan ID ${id} (${this.kunjunganList[idx].nama})`);
     return this.kunjunganList[idx];
   }
@@ -810,10 +962,16 @@ class DataStore {
     this.kunjunganList[idx].dihapus = true;
     this.kunjunganList[idx].diubah_pada = new Date().toISOString();
     this.saveToLocalStorage();
-    this.logAudit('Hapus Kunjungan', `Menghapus (soft delete) kunjungan pasien ${this.kunjunganList[idx].nama}`);
+    this.notifyListeners();
+
     if (typeof window !== 'undefined') {
-      fetch(`/api/kunjungan/${id}`, { method: 'DELETE' }).catch(() => {});
+      this.apiFetch(`/api/kunjungan/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
     }
+
+    this.logAudit(
+      'Hapus Kunjungan',
+      `Menghapus (soft delete) kunjungan pasien ${this.kunjunganList[idx].nama}`
+    );
     return true;
   }
 
@@ -821,7 +979,16 @@ class DataStore {
     const idx = this.kunjunganList.findIndex((k) => k.id === id);
     if (idx === -1) return false;
     this.kunjunganList[idx].dihapus = false;
+    this.kunjunganList[idx].diubah_pada = new Date().toISOString();
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/kunjungan/${encodeURIComponent(id)}/restore`, {
+        method: 'PATCH',
+      }).catch(() => {});
+    }
+
     this.logAudit('Pulihkan Kunjungan', `Memulihkan kunjungan pasien ${this.kunjunganList[idx].nama}`);
     return true;
   }
@@ -831,6 +998,14 @@ class DataStore {
     if (idx === -1) return false;
     const item = this.kunjunganList.splice(idx, 1)[0];
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/kunjungan/${encodeURIComponent(id)}/permanent`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    }
+
     this.logAudit('Hapus Permanen Kunjungan', `Menghapus permanen kunjungan pasien ${item.nama}`);
     return true;
   }
@@ -851,7 +1026,7 @@ class DataStore {
       }
     }
 
-    // Auto-update WBP room and block from imported visits
+    const updatedWbps: WbpItem[] = [];
     normalized.forEach((k) => {
       const cleanRoom = (k.kamar || '').trim();
       if (cleanRoom) {
@@ -861,84 +1036,77 @@ class DataStore {
           if (wbpIdx !== -1) {
             this.wbpList[wbpIdx].kamar = cleanRoom;
             this.wbpList[wbpIdx].blok = autoBlok;
+            updatedWbps.push(this.wbpList[wbpIdx]);
           }
         } else if (k.nama) {
-          const wbpIdx = this.wbpList.findIndex((w) => w.nama.trim().toLowerCase() === k.nama.trim().toLowerCase());
+          const wbpIdx = this.wbpList.findIndex(
+            (w) => w.nama.trim().toLowerCase() === k.nama.trim().toLowerCase()
+          );
           if (wbpIdx !== -1) {
             this.wbpList[wbpIdx].kamar = cleanRoom;
             this.wbpList[wbpIdx].blok = autoBlok;
+            updatedWbps.push(this.wbpList[wbpIdx]);
           }
         }
       }
     });
 
     this.saveToLocalStorage();
-    this.logAudit('Impor Kunjungan', `Mengimpor ${items.length} kunjungan (${replaceAll ? 'Timpa Semua' : 'Tambah/Perbarui'})`);
+    this.notifyListeners();
 
-    // Sync to Cloud SQL PostgreSQL for cross-device access
     if (typeof window !== 'undefined') {
       try {
         if (replaceAll) {
-          await fetch('/api/kunjungan/all', { method: 'DELETE' });
+          await this.apiFetch('/api/kunjungan/all', { method: 'DELETE' });
         }
-        await fetch('/api/kunjungan/batch', {
+        await this.apiFetch('/api/kunjungan/batch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            normalized.map((k) => ({
-              id: k.id,
-              tanggal: k.tanggal,
-              wbpId: k.wbp_id || null,
-              nama: k.nama,
-              kamar: k.kamar || '',
-              keluhan1: k.keluhan1 || '',
-              keluhan2: k.keluhan2 || '',
-              keluhan3: k.keluhan3 || '',
-              penyakit1: k.penyakit1 || '',
-              jenis1: k.jenis1 || '',
-              penyakit2: k.penyakit2 || '',
-              jenis2: k.jenis2 || '',
-              penyakit3: k.penyakit3 || '',
-              jenis3: k.jenis3 || '',
-              terapi: k.terapi || '',
-              dokterPemeriksa: k.dokter_pemeriksa || '',
-              perawat: k.perawat || '',
-              catatan: k.catatan || '',
-              dihapus: false,
-            }))
-          ),
+          body: JSON.stringify(normalized),
         });
+        if (updatedWbps.length > 0) {
+          await this.apiFetch('/api/wbp/batch', {
+            method: 'POST',
+            body: JSON.stringify(updatedWbps),
+          });
+        }
       } catch (err) {
         console.error('Failed to sync visits to backend:', err);
       }
     }
+
+    this.logAudit(
+      'Impor Kunjungan',
+      `Mengimpor ${items.length} kunjungan (${replaceAll ? 'Timpa Semua' : 'Tambah/Perbarui'})`
+    );
   }
 
   public async clearAllKunjungan(): Promise<void> {
     this.kunjunganList = [];
     this.saveToLocalStorage();
-    this.logAudit('Hapus Semua Kunjungan', 'Mengosongkan seluruh data kunjungan berobat');
+    this.notifyListeners();
     if (typeof window !== 'undefined') {
       try {
-        await fetch('/api/kunjungan/all', { method: 'DELETE' });
+        await this.apiFetch('/api/kunjungan/all', { method: 'DELETE' });
       } catch (e) {
         console.error('Failed to clear kunjungan from db', e);
       }
     }
+    this.logAudit('Hapus Semua Kunjungan', 'Mengosongkan seluruh data kunjungan berobat');
   }
 
   public async clearAllWbp(): Promise<void> {
     this.wbpList = [];
     this.kunjunganList = [];
     this.saveToLocalStorage();
-    this.logAudit('Hapus Semua WBP', 'Mengosongkan seluruh direktori WBP dan data kunjungan terkait');
+    this.notifyListeners();
     if (typeof window !== 'undefined') {
       try {
-        await fetch('/api/wbp/all', { method: 'DELETE' });
+        await this.apiFetch('/api/wbp/all', { method: 'DELETE' });
       } catch (e) {
         console.error('Failed to clear WBP from db', e);
       }
     }
+    this.logAudit('Hapus Semua WBP', 'Mengosongkan seluruh direktori WBP dan data kunjungan terkait');
   }
 
   public async resetAllData(): Promise<void> {
@@ -950,16 +1118,18 @@ class DataStore {
     this.referensiList = INITIAL_REFERENSI;
     this.penyakitList = INITIAL_PENYAKIT;
     this.pengaturan = INITIAL_PENGATURAN;
+    this.sidbHistory = [];
+    this.auditLogs = [];
     this.saveToLocalStorage();
-    this.logAudit('Reset Data Pabrik', 'Mengembalikan seluruh data ke konfigurasi awal bawaan');
+    this.notifyListeners();
     if (typeof window !== 'undefined') {
       try {
-        await fetch('/api/kunjungan/all', { method: 'DELETE' });
-        await fetch('/api/wbp/all', { method: 'DELETE' });
+        await this.apiFetch('/api/system/factory-reset', { method: 'POST' });
       } catch (e) {
         console.error('Failed to reset db', e);
       }
     }
+    this.logAudit('Reset Data Pabrik', 'Mengembalikan seluruh data ke konfigurasi awal bawaan');
   }
 
   // Referensi & Penyakit Methods
@@ -972,6 +1142,15 @@ class DataStore {
     const newItem: ReferensiItem = { ...item, id: newId };
     this.referensiList.push(newItem);
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch('/api/referensi', {
+        method: 'POST',
+        body: JSON.stringify(newItem),
+      }).catch((err) => console.error('Failed to sync addReferensi:', err));
+    }
+
     this.logAudit('Tambah Referensi', `Menambah keluhan: ${item.keluhan} -> ${item.masuk_penyakit}`);
     return newItem;
   }
@@ -981,6 +1160,15 @@ class DataStore {
     if (idx === -1) return null;
     this.referensiList[idx] = { ...this.referensiList[idx], ...updates };
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/referensi/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(this.referensiList[idx]),
+      }).catch((err) => console.error('Failed to sync updateReferensi:', err));
+    }
+
     this.logAudit('Ubah Referensi', `Memperbarui referensi keluhan ${this.referensiList[idx].keluhan}`);
     return this.referensiList[idx];
   }
@@ -990,6 +1178,14 @@ class DataStore {
     if (idx === -1) return false;
     const deleted = this.referensiList.splice(idx, 1)[0];
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/referensi/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch((err) => console.error('Failed to sync deleteReferensi:', err));
+    }
+
     this.logAudit('Hapus Referensi', `Menghapus referensi keluhan: ${deleted.keluhan}`);
     return true;
   }
@@ -1003,7 +1199,6 @@ class DataStore {
     if (idx === -1) return null;
     this.penyakitList[idx] = { ...this.penyakitList[idx], ...updates };
 
-    // If 'jenis' changed, update matching referensi items as well!
     if (updates.jenis) {
       const diseaseName = this.penyakitList[idx].penyakit.toLowerCase();
       this.referensiList.forEach((r) => {
@@ -1014,15 +1209,40 @@ class DataStore {
     }
 
     this.saveToLocalStorage();
-    this.logAudit('Ubah Penyakit', `Memperbarui penyakit ${this.penyakitList[idx].penyakit} (Jenis: ${this.penyakitList[idx].jenis})`);
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch(`/api/penyakit/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(this.penyakitList[idx]),
+      }).catch((err) => console.error('Failed to sync updatePenyakit:', err));
+    }
+
+    this.logAudit(
+      'Ubah Penyakit',
+      `Memperbarui penyakit ${this.penyakitList[idx].penyakit} (Jenis: ${this.penyakitList[idx].jenis})`
+    );
     return this.penyakitList[idx];
   }
 
   public addPenyakit(item: Omit<PenyakitItem, 'id'>): PenyakitItem {
     const newId = 'pen-' + Date.now();
-    const newItem: PenyakitItem = { ...item, id: newId };
+    const newItem: PenyakitItem = {
+      ...item,
+      id: newId,
+      urutan: item.urutan ?? this.penyakitList.length + 1,
+    };
     this.penyakitList.push(newItem);
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch('/api/penyakit', {
+        method: 'POST',
+        body: JSON.stringify(newItem),
+      }).catch((err) => console.error('Failed to sync addPenyakit:', err));
+    }
+
     this.logAudit('Tambah Penyakit', `Menambah penyakit baru: ${newItem.penyakit}`);
     return newItem;
   }
@@ -1035,6 +1255,15 @@ class DataStore {
   public updatePengaturan(updates: Partial<PengaturanApp>) {
     this.pengaturan = { ...this.pengaturan, ...updates };
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch('/api/pengaturan/app_settings', {
+        method: 'POST',
+        body: JSON.stringify(this.pengaturan),
+      }).catch((err) => console.error('Failed to sync updatePengaturan:', err));
+    }
+
     this.logAudit('Ubah Pengaturan', 'Memperbarui konfigurasi sistem');
   }
 
@@ -1053,37 +1282,130 @@ class DataStore {
     };
     this.sidbHistory.unshift(item);
     this.saveToLocalStorage();
+    this.notifyListeners();
+
+    if (typeof window !== 'undefined') {
+      this.apiFetch('/api/sidb-history', {
+        method: 'POST',
+        body: JSON.stringify(item),
+      }).catch((err) => console.error('Failed to sync addSidbHistory:', err));
+    }
   }
 
-  // Reset / Full Data Export & Import
+  // Comprehensive Full Backup Export & Restore (All Entities + Settings + Logs + Preferences)
   public exportFullBackup(): string {
+    const theme =
+      typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.THEME) || 'light' : 'light';
     const data = {
-      version: '1.0',
+      version: '2.0',
+      app_name: 'Klinik Pratama Lapas Kelas IIB Dompu',
       exported_at: new Date().toISOString(),
+      counts: {
+        wbp: this.wbpList.length,
+        kunjungan_total: this.kunjunganList.length,
+        kunjungan_aktif: this.kunjunganList.filter((k) => !k.dihapus).length,
+        kunjungan_sampah: this.kunjunganList.filter((k) => k.dihapus).length,
+        referensi: this.referensiList.length,
+        penyakit: this.penyakitList.length,
+        sidb_history: this.sidbHistory.length,
+        audit_logs: this.auditLogs.length,
+      },
       wbp: this.wbpList,
       kunjungan: this.kunjunganList,
       referensi: this.referensiList,
       penyakit: this.penyakitList,
       pengaturan: this.pengaturan,
       sidb_history: this.sidbHistory,
+      audit_logs: this.auditLogs,
+      preferences: {
+        theme,
+      },
     };
     return JSON.stringify(data, null, 2);
+  }
+
+  public async exportFullBackupAsync(): Promise<string> {
+    const theme =
+      typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.THEME) || 'light' : 'light';
+    try {
+      const res = await fetch('/api/backup/export', { cache: 'no-store' });
+      if (res.ok) {
+        const serverBackup = await res.json();
+        serverBackup.preferences = { theme };
+        return JSON.stringify(serverBackup, null, 2);
+      }
+    } catch {
+      // fallback to local
+    }
+    return this.exportFullBackup();
+  }
+
+  public async importFullBackupAsync(jsonString: string): Promise<boolean> {
+    try {
+      const data = JSON.parse(jsonString);
+      if (!data || typeof data !== 'object') return false;
+      if (
+        !Array.isArray(data.wbp) &&
+        !Array.isArray(data.kunjungan) &&
+        !Array.isArray(data.referensi) &&
+        !Array.isArray(data.penyakit)
+      ) {
+        return false;
+      }
+
+      if (Array.isArray(data.wbp)) this.wbpList = data.wbp;
+      if (Array.isArray(data.kunjungan)) {
+        this.kunjunganList = data.kunjungan.map((k: KunjunganItem) => ({
+          ...k,
+          tanggal: normalizeDateIndo(k.tanggal),
+        }));
+      }
+      if (Array.isArray(data.referensi)) this.referensiList = data.referensi;
+      if (Array.isArray(data.penyakit)) this.penyakitList = data.penyakit;
+      if (data.pengaturan) this.pengaturan = { ...INITIAL_PENGATURAN, ...data.pengaturan };
+      if (Array.isArray(data.sidb_history)) this.sidbHistory = data.sidb_history;
+      if (Array.isArray(data.audit_logs)) this.auditLogs = data.audit_logs;
+      if (data.preferences?.theme && typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.THEME, data.preferences.theme);
+        document.documentElement.classList.toggle('dark', data.preferences.theme === 'dark');
+      }
+
+      this.saveToLocalStorage();
+      this.notifyListeners();
+
+      if (typeof window !== 'undefined') {
+        const res = await this.apiFetch('/api/backup/restore', {
+          method: 'POST',
+          body: JSON.stringify({
+            wbp: this.wbpList,
+            kunjungan: this.kunjunganList,
+            referensi: this.referensiList,
+            penyakit: this.penyakitList,
+            pengaturan: this.pengaturan,
+            sidb_history: this.sidbHistory,
+            audit_logs: this.auditLogs,
+          }),
+        });
+        if (!res.ok) {
+          console.error('Server restore returned error:', await res.text());
+        }
+      }
+
+      this.logAudit('Pulihkan Backup', 'Memulihkan cadangan menyeluruh sistem ke Cloud SQL');
+      return true;
+    } catch (e) {
+      console.error('Invalid backup file', e);
+      return false;
+    }
   }
 
   public importFullBackup(jsonString: string): boolean {
     try {
       const data = JSON.parse(jsonString);
-      if (Array.isArray(data.wbp)) this.wbpList = data.wbp;
-      if (Array.isArray(data.kunjungan)) this.kunjunganList = data.kunjungan;
-      if (Array.isArray(data.referensi)) this.referensiList = data.referensi;
-      if (Array.isArray(data.penyakit)) this.penyakitList = data.penyakit;
-      if (data.pengaturan) this.pengaturan = { ...INITIAL_PENGATURAN, ...data.pengaturan };
-      if (Array.isArray(data.sidb_history)) this.sidbHistory = data.sidb_history;
-      this.saveToLocalStorage();
-      this.logAudit('Pulihkan Backup', 'Memulihkan data lengkap dari cadangan JSON');
+      if (!data || typeof data !== 'object') return false;
+      void this.importFullBackupAsync(jsonString);
       return true;
-    } catch (e) {
-      console.error('Invalid backup file', e);
+    } catch {
       return false;
     }
   }
@@ -1098,30 +1420,33 @@ class DataStore {
     }
 
     const calculated = this.getCalculatedKunjungan(false);
-    const patientVisits = calculated.filter((k) => {
-      if (patient) {
-        return k.wbp_id === patient.id || k.nama.trim().toLowerCase() === patient.nama.trim().toLowerCase();
-      }
-      return k.nama.trim().toLowerCase() === patientIdOrName.trim().toLowerCase();
-    }).sort((a, b) => {
-      const dateA = parseDate(a.tanggal)?.getTime() || 0;
-      const dateB = parseDate(b.tanggal)?.getTime() || 0;
-      return dateB - dateA;
-    });
+    const patientVisits = calculated
+      .filter((k) => {
+        if (patient) {
+          return (
+            k.wbp_id === patient.id ||
+            k.nama.trim().toLowerCase() === patient.nama.trim().toLowerCase()
+          );
+        }
+        return k.nama.trim().toLowerCase() === patientIdOrName.trim().toLowerCase();
+      })
+      .sort((a, b) => {
+        const dateA = parseDate(a.tanggal)?.getTime() || 0;
+        const dateB = parseDate(b.tanggal)?.getTime() || 0;
+        return dateB - dateA;
+      });
 
     const totalVisits = patientVisits.length;
 
-    // This month visits
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
     const thisMonthVisits = patientVisits.filter((k) => {
       const d = parseDate(k.tanggal);
-      return d && (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
+      return d && d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
     });
 
-    // Illnesses this month breakdown
     const illnessCounts: Record<string, { count: number; jenis?: JenisPenyakit; icd10?: string }> = {};
     const contagiousIllnessesThisMonth: string[] = [];
 
@@ -1143,22 +1468,19 @@ class DataStore {
       });
     });
 
-    const sortedIllnesses = Object.entries(illnessCounts).map(([penyakit, data]) => ({
-      penyakit,
-      count: data.count,
-      jenis: data.jenis,
-      icd10: data.icd10,
-    })).sort((a, b) => b.count - a.count);
+    const sortedIllnesses = Object.entries(illnessCounts)
+      .map(([penyakit, data]) => ({
+        penyakit,
+        count: data.count,
+        jenis: data.jenis,
+        icd10: data.icd10,
+      }))
+      .sort((a, b) => b.count - a.count);
 
-    // Last 10 visits
     const last10Visits = patientVisits.slice(0, 10);
-
-    // First ever visit
     const firstVisit = patientVisits.length > 0 ? patientVisits[patientVisits.length - 1] : null;
-    // Previous visit before the latest one
     const previousVisit = patientVisits.length > 1 ? patientVisits[1] : null;
 
-    // Visits in last 7 days
     const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
     const last7DaysVisits = patientVisits.filter((k) => {
       const d = parseDate(k.tanggal);
@@ -1182,11 +1504,8 @@ class DataStore {
     };
   }
 
-  // Calculate official clinical metrics (Kunjungan vs Pasien Unik vs Kasus) for any set of visits
   public calculateMetrics(visits: CalculatedKunjungan[]) {
     const totalKunjungan = visits.length;
-
-    // Pasien unik = distinct wbp_id from DATA_WBP
     const validWbpIds = new Set<string>();
     let unregisteredCount = 0;
 
@@ -1201,7 +1520,6 @@ class DataStore {
     const pasienUnikCount = validWbpIds.size;
     const kunjunganPerPasien = pasienUnikCount > 0 ? totalKunjungan / pasienUnikCount : 0;
 
-    // Kasus per penyakit (each visit can only count 1 case for a given disease even if complaint 1 and 2 are the same disease)
     const casesByDisease: Record<string, number> = {};
     const patientsByDisease: Record<string, Set<string>> = {};
     const contagiousCasesVisits = new Set<string>();
@@ -1256,3 +1574,13 @@ class DataStore {
 }
 
 export const store = new DataStore();
+
+export function useStoreSync(): number {
+  const [version, setVersion] = useState(() => store.getVersion());
+  useEffect(() => {
+    return store.subscribe(() => {
+      setVersion(store.getVersion());
+    });
+  }, []);
+  return version;
+}

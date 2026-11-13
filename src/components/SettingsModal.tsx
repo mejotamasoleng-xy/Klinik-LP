@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   KeyRound,
@@ -19,7 +19,7 @@ import {
   AlertCircle,
   Plus,
 } from 'lucide-react';
-import { hashPassword, store } from '../lib/storage';
+import { hashPassword, store, useStoreSync } from '../lib/storage';
 import { BatchConfig } from '../types';
 import ReferencesManager from './ReferencesManager';
 import SidbUpdater from './SidbUpdater';
@@ -37,6 +37,7 @@ export type SettingsSubTab =
   | 'hapus_semua';
 
 export default function SettingsModal() {
+  const storeVersion = useStoreSync();
   const [activeTab, setActiveTab] = useState<SettingsSubTab>('keamanan');
 
   // Keamanan: Ganti Password
@@ -55,6 +56,14 @@ export default function SettingsModal() {
   const [batches, setBatches] = useState<BatchConfig[]>(pengaturan.batches);
   const [newBatchName, setNewBatchName] = useState('');
   const [newBatchColor, setNewBatchColor] = useState('#F9CB9C');
+
+  // Keep form settings synced if updated from another device
+  useEffect(() => {
+    const latest = store.getPengaturan();
+    setBatasKali(latest.batas_sering_berobat_kali);
+    setPeriodeHari(latest.periode_sering_hari);
+    setBatches(latest.batches);
+  }, [storeVersion]);
 
   // Soft Deleted Visits (Trash bin) & Audit logs
   const deletedVisits = store.getCalculatedKunjungan(true).filter((k) => k.dihapus);
@@ -119,13 +128,11 @@ export default function SettingsModal() {
 
   const handleRestoreVisit = (id: string) => {
     store.restoreKunjungan(id);
-    window.location.reload();
   };
 
   const handlePermanentDelete = (id: string) => {
     if (confirm('Hapus permanen data kunjungan ini?')) {
       store.permanentDeleteKunjungan(id);
-      window.location.reload();
     }
   };
 
@@ -135,24 +142,21 @@ export default function SettingsModal() {
   const handleClearAllVisits = async () => {
     if (confirm('⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA data kunjungan harian? Data WBP akan tetap tersimpan.')) {
       await store.clearAllKunjungan();
-      setClearActionMsg('Semua catatan kunjungan harian berhasil dibersihkan.');
-      setTimeout(() => window.location.reload(), 1200);
+      setClearActionMsg('Semua catatan kunjungan harian berhasil dibersihkan di server dan semua perangkat.');
     }
   };
 
   const handleClearAllWbp = async () => {
     if (confirm('⚠️ PERINGATAN KERAS: Apakah Anda yakin ingin MENGHAPUS SEMUA data WBP beserta seluruh data kunjungan berobatnya? Tindakan ini tidak dapat dibatalkan.')) {
       await store.clearAllWbp();
-      setClearActionMsg('Seluruh data WBP dan kunjungan terkait berhasil dihapus.');
-      setTimeout(() => window.location.reload(), 1200);
+      setClearActionMsg('Seluruh data WBP dan kunjungan terkait berhasil dihapus di server dan semua perangkat.');
     }
   };
 
   const handleFactoryReset = async () => {
     if (confirm('⚠️ PERINGATAN PABRIK: Ini akan mengembalikan sistem ke data awal pabrik (contoh bawaan). Lanjutkan?')) {
       await store.resetAllData();
-      setClearActionMsg('Sistem berhasil di-reset ke konfigurasi awal.');
-      setTimeout(() => window.location.reload(), 1200);
+      setClearActionMsg('Sistem berhasil di-reset ke konfigurasi awal di server dan semua perangkat.');
     }
   };
 

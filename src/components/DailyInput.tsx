@@ -36,6 +36,7 @@ import {
   inputFormatToDate,
   parseDate,
   store,
+  useStoreSync,
 } from '../lib/storage';
 import { TOP_QUICK_CHIPS } from '../data/initialData';
 
@@ -45,6 +46,7 @@ interface DailyInputProps {
 }
 
 export default function DailyInput({ onOpenMedicalRecord }: DailyInputProps) {
+  const storeVersion = useStoreSync();
   // Form fields
   const [tanggal, setTanggal] = useState<string>(getTodayFormatted());
   const [namaInput, setNamaInput] = useState<string>('');
@@ -101,7 +103,7 @@ export default function DailyInput({ onOpenMedicalRecord }: DailyInputProps) {
 
   useEffect(() => {
     reloadData();
-  }, []);
+  }, [storeVersion]);
 
   // Filter today's or selected date's visits
   const filteredVisits = allKunjungan

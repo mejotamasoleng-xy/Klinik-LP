@@ -18,7 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import { parseFileInBrowser } from '../lib/excelExport';
-import { determineBlokByKamar, store } from '../lib/storage';
+import { determineBlokByKamar, store, useStoreSync } from '../lib/storage';
 import { WbpItem } from '../types';
 
 interface ColumnMapping {
@@ -40,10 +40,12 @@ interface ColumnMapping {
 }
 
 export default function SidbUpdater() {
+  useStoreSync();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [isApplying, setIsApplying] = useState(false);
 
   // Column mapping state
   const [mapping, setMapping] = useState<ColumnMapping>({
@@ -225,35 +227,30 @@ export default function SidbUpdater() {
     setStep(3);
   };
 
-  // Step 4: Apply Updates
-  const handleApply = () => {
-    // 1. Add new WBP
-    diffResult.newWbp.forEach((w) => {
-      store.addWbp(w);
-    });
-
-    // 2. Apply updates
-    diffResult.updatedWbp.forEach((u) => {
-      store.updateWbp(u.existing.id, u.updated);
-    });
-
-    // 3. Mark missing WBP as 'perlu_dicek'
-    diffResult.missingWbp.forEach((m) => {
-      store.updateWbp(m.id, { perlu_dicek: true });
-    });
-
-    // 4. Record history
-    const summary = {
-      tanggal: new Date().toISOString(),
-      nama_file: file?.name || 'Pencarian Kompleks.xls',
-      total_baris: parsedRows.length,
-      wbp_baru: diffResult.newWbp.length,
-      wbp_diperbarui: diffResult.updatedWbp.length,
-      wbp_ditandai_cek: diffResult.missingWbp.length,
-    };
-    store.addSidbHistory(summary);
-    setAppliedSummary(summary);
-    setStep(4);
+  // Step 4: Apply Updates atomically & broadcast to all devices
+  const handleApply = async () => {
+    if (isApplying) return;
+    setIsApplying(true);
+    try {
+      const summary = {
+        tanggal: new Date().toISOString(),
+        nama_file: file?.name || 'Pencarian Kompleks.xls',
+        total_baris: parsedRows.length,
+        wbp_baru: diffResult.newWbp.length,
+        wbp_diperbarui: diffResult.updatedWbp.length,
+        wbp_ditandai_cek: diffResult.missingWbp.length,
+      };
+      await store.applySidbUpdates({
+        newWbp: diffResult.newWbp,
+        updatedWbp: diffResult.updatedWbp.map((u) => u.updated),
+        missingIds: diffResult.missingWbp.map((m) => m.id),
+        history: summary,
+      });
+      setAppliedSummary(summary);
+      setStep(4);
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const handleReset = () => {
@@ -564,11 +561,12 @@ export default function SidbUpdater() {
               </button>
               <button
                 type="button"
+                disabled={isApplying}
                 onClick={handleApply}
-                className="px-6 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-2"
+                className="px-6 py-2.5 bg-teal-700 hover:bg-teal-800 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-2"
               >
                 <Check className="w-4 h-4" />
-                <span>Terapkan Pembaruan Sekarang</span>
+                <span>{isApplying ? 'Menyimpan ke Cloud SQL...' : 'Terapkan Pembaruan Sekarang'}</span>
               </button>
             </div>
           </div>

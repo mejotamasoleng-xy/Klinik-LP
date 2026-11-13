@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BookOpen,
   Plus,
@@ -18,9 +18,10 @@ import {
   X,
 } from 'lucide-react';
 import { PenyakitItem, ReferensiItem } from '../types';
-import { store } from '../lib/storage';
+import { store, useStoreSync } from '../lib/storage';
 
 export default function ReferencesManager() {
+  const storeVersion = useStoreSync();
   const [activeTab, setActiveTab] = useState<'keluhan' | 'penyakit'>('keluhan');
   const [searchQuery, setSearchQuery] = useState('');
   const [referensiList, setReferensiList] = useState<ReferensiItem[]>(() => store.getReferensi());
@@ -37,6 +38,10 @@ export default function ReferencesManager() {
     setReferensiList(store.getReferensi());
     setPenyakitList(store.getPenyakit());
   };
+
+  useEffect(() => {
+    reloadData();
+  }, [storeVersion]);
 
   // All visits for counting ICD-10 usage dynamically
   const allVisits = store.getCalculatedKunjungan(false);

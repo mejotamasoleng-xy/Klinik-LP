@@ -4,13 +4,22 @@
  */
 
 import { initializeApp, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth, Auth } from 'firebase-admin/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-if (!getApps().length) {
-  initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
+let adminAuthInstance: Auth | null = null;
+
+try {
+  if (!getApps().length && firebaseConfig?.projectId) {
+    initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+  }
+  if (getApps().length) {
+    adminAuthInstance = getAuth();
+  }
+} catch (err) {
+  console.warn('[AI Studio] Firebase Admin initialization skipped:', err);
 }
 
-export const adminAuth = getAuth();
+export const adminAuth = adminAuthInstance;
