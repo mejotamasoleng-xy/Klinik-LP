@@ -840,15 +840,14 @@ export async function importLegacySnapshotOnce(
         .onConflictDoNothing()
         .returning({ key: appMigrations.key });
       const initialImport = initialClaim.length > 0;
+      if (!initialImport) return { imported: false, initialImport: false };
 
-      if (initialImport) {
-        await tx.delete(kunjungan);
-        await tx.delete(wbp);
-        await tx.delete(referensiIcd10);
-        await tx.delete(daftarPenyakit);
-        await tx.delete(sidbHistory);
-        await tx.delete(auditLogs);
-      }
+      await tx.delete(kunjungan);
+      await tx.delete(wbp);
+      await tx.delete(referensiIcd10);
+      await tx.delete(daftarPenyakit);
+      await tx.delete(sidbHistory);
+      await tx.delete(auditLogs);
 
       const insertInChunks = async (table: any, rows: any[]) => {
         for (let index = 0; index < rows.length; index += 100) {
