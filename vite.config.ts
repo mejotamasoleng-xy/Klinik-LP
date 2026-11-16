@@ -4,6 +4,8 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const disableHmr = process.env.DISABLE_HMR === 'true' || Boolean(process.env.V0_WORKSPACE_ROOT);
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -15,11 +17,11 @@ export default defineConfig(() => {
       host: '0.0.0.0',
       port: 3000,
       allowedHosts: true as const,
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // The v0 preview proxy does not reliably pass Vite's HMR WebSocket.
+      hmr: disableHmr ? false : undefined,
+      ws: disableHmr ? (false as const) : undefined,
+      // Disable watching in agent previews to prevent flicker during streamed edits.
+      watch: disableHmr ? null : {},
     },
   };
 });

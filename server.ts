@@ -4,7 +4,6 @@
  */
 
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
@@ -66,7 +65,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT) || 3000;
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -908,28 +907,46 @@ app.post('/api/audit', async (req, res) => {
 });
 
 // Setup Vite middlewares for Frontend SPA
-async function startServer() {
-  const isProd = process.env.NODE_ENV === 'production';
+let initializationPromise: Promise<void> | null = null;
 
-  if (!isProd) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+export function initializeApp() {
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const isServerlessProduction = isProduction && process.env.VERCEL === '1';
+
+      if (!isProduction) {
+        const { createServer: createViteServer } = await import('vite');
+        const vite = await createViteServer({
+          server: { middlewareMode: true },
+          appType: 'spa',
+        });
+        app.use(vite.middlewares);
+      } else if (!isServerlessProduction) {
+        app.use(express.static(path.resolve(__dirname, 'dist')));
+        app.get('*', (_req, res) => {
+          res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+        });
+      }
+
+      await seedInitialDataIfEmpty();
+      await ensureClinicAuth();
+    })().catch((error) => {
+      initializationPromise = null;
+      throw error;
     });
   }
 
-  await seedInitialDataIfEmpty();
-  await ensureClinicAuth();
+  return initializationPromise;
+}
 
+async function startServer() {
+  await initializeApp();
   app.listen(port, '0.0.0.0', () => {
     console.log(`Server Klinik Lapas Dompu running on http://0.0.0.0:${port}`);
   });
 }
 
-startServer();
+if (!(process.env.NODE_ENV === 'production' && process.env.VERCEL === '1')) {
+  void startServer();
+}
